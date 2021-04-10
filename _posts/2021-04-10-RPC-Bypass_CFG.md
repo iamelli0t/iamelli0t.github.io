@@ -7,11 +7,11 @@ author:
   - iamelli0t
 ---
 
-The general method of browser render process exploit is: after exploiting the vulnerability to obtain user mode arbitrary memory read/write primitive, the vtable of DOM/js object is tampered to hijack the code execution flow. Then VirtualProtect is called by ROP chain to modify the shellcode memory to PAGE_EXECUTE_READWRITE, and the code execution flow is jumped to shellcode by ROP chain finally. After Windows 8.1, Microsoft introduced CFG (Control Flow Guard)[1] mitigation to verify the indirect function call, which mitigates the exploitation of tampering with vtable.<br>
+The general method of browser render process exploit is: after exploiting the vulnerability to obtain user mode arbitrary memory read/write primitive, the vtable of DOM/js object is tampered to hijack the code execution flow. Then VirtualProtect is called by ROP chain to modify the shellcode memory to PAGE_EXECUTE_READWRITE, and the code execution flow is jumped to shellcode by ROP chain finally. After Windows 8.1, Microsoft introduced CFG (Control Flow Guard)[1] mitigation to verify the indirect function call, which mitigates the exploitation of tampering with vtable to get code execution.<br>
 
-However, the confrontation is not end. Some new methods to bypass CFG mitigation  have emerged. For example, in chakra/jscript9, the code execution flow is hijacked by tampering with the function return address on the stack; in v8, WebAssembly with executable memory property is used to executes shellcode. In December 2020, Microsoft introduced CET[2] mitigation technology based on Intel Tiger Lake CPU in Windows 10 20H1, which protects the exploitation of tampering with the function return address on the stack. Therefore, how to bypass CFG in a CET mitigation environment has become a new problem for vulnerability exploitation.<br>
+However, the confrontation is not end. Some new methods to bypass CFG mitigation  have emerged. For example, in chakra/jscript9, the code execution flow is hijacked by tampering with the function return address on the stack; in v8, WebAssembly with executable memory property is used to execute shellcode. In December 2020, Microsoft introduced CET(Control-flow Enforcement Technology)[2] mitigation technology based on Intel Tiger Lake CPU in Windows 10 20H1, which protects the exploitation of tampering with the function return address on the stack. Therefore, how to bypass CFG in a CET mitigation environment has become a new problem for vulnerability exploitation.<br>
 
-When analyzing CVE-2021-26411 the in-the-wild sample, we found a new method to bypass CFG mitigation using Windows RPC (Remote Procedure Call)[3]. This method does not rely on the ROP chain. By constructing RPC_MESSAGE, arbitrary code execution can be achieved by calling rpcrt4!NdrServerCall2 manually. <br>
+When analyzing CVE-2021-26411 in-the-wild sample, we found a new method to bypass CFG mitigation using Windows RPC (Remote Procedure Call)[3]. This method does not rely on the ROP chain. By constructing RPC_MESSAGE, arbitrary code execution can be achieved by calling rpcrt4!NdrServerCall2 manually. <br>
 
 ##  CVE-2021-26411 Retrospect
 My blog of "CVE-2021-26411: Internet Explorer mshtml use-after-free" 
@@ -20,15 +20,15 @@ has illustrated the root cause: removeAttributeNode() triggers the attribute obj
 The bug fix for this vulnerability in Windows March patch is to add an index check before deleting the object in CAttrArray::Destroy function:<br>
 ![avatar](/images/RPC-Bypass-CFG/1.png)<br><br>
 
-For such a UAF vulnerability with a controllable memory size, the idea of ​​exploitation is: use two different types of pointers (BSTR and Dictionary.items) to point to the reuse memory, then pointer leak and pointer dereference is achieved via type confusion:<br>
+For such a UAF vulnerability with a controllable memory size, the idea of exploitation is: use two different types of pointers (BSTR and Dictionary.items) to point to the reuse memory, then the pointer leak and pointer dereference ability is achieved via type confusion:<br>
 ![avatar](/images/RPC-Bypass-CFG/2.png)<br><br>
 
 
 ##  Windows RPC introduction and exploitation
-Windows RPC is used to support the scenario of distributed client/server function calls. Based on Windows RPC, the client can call server functions thw same as local function call. The basic architecture of Windows RPC is shown as follows:<br>
+Windows RPC is used to support the scenario of distributed client/server function calls. Based on Windows RPC, the client can invoke server functions the same as local function call. The basic architecture of Windows RPC is shown as follows:<br>
 ![avatar](/images/RPC-Bypass-CFG/3.png)<br><br>
 
-The client/server program passes the calling parameters or return values ​​to the lower-level Stub function. The Stub function is responsible for encapsulating the data into NDR (Network Data Representation) format. Communications through the runtime library is provided by rpcrt4.dll.<br>
+The client/server program passes the calling parameters or return values to the lower-level Stub function. The Stub function is responsible for encapsulating the data into NDR (Network Data Representation) format. Communications through the runtime library is provided by rpcrt4.dll.<br>
 
 An idl example is given below:<br>
 ```cpp
@@ -58,7 +58,7 @@ According to the idl given above, when the client calls add(0x111, 0x222), the s
 
 It can be seen that the dynamic debugging memory dump is consistent with the RPC_MESSAGE structure analysis, and the add function is stored in MIDL_SERVER_INFO.DispatchTable.<br>
 
-Next, we analyze how rpcrt4!NdrServerCall2 calls the add function according to RPC_MESSAGE:<br>
+Next, we analyze how rpcrt4!NdrServerCall2 invokes the add function according to RPC_MESSAGE:<br>
 
 The rpcrt4!NdrServerCall2 calls rpcrt4!NdrStubCall2 internally. The rpcrt4!NdrStubCall2 calculates the function pointer address based on MIDL_SERVER_INFO.DispatchTable and RPC_MESSAGE.ProcNum, and passes the function pointer, function parameters and parameter length to rpcrt4!Invoke:<br>
 ![avatar](/images/RPC-Bypass-CFG/7.png)<br><br>
@@ -80,26 +80,27 @@ We can replace the DOM object vtable's function pointer with rpcrt4!NdrServerCal
 
 Then we solve the problem 2: How to bypass the CFG protection in rpcrt4!NdrServerCall2?<br>
 The method in the sample is:<br>
-1) Use fake RPC_MESSAGE and rpcrt4!NdrServerCall2 to invoke VirtualProtect, and modify the memory attribute of RPCRT4!__guard_check_icall_fptr to PAGE_EXECUTE_READWRITE
-2) Replace the pointer ntdll!LdrpValidateUserCallTarget saved in rpcrt4!__guard_check_icall_fptr with ntdll!KiFastSystemCallRet to kill the CFG check in rpcrt4.dll
+1) Use fake RPC_MESSAGE and rpcrt4!NdrServerCall2 to invoke VirtualProtect, and modify the memory attribute of RPCRT4!__guard_check_icall_fptr to PAGE_EXECUTE_READWRITE<br>
+2) Replace the pointer ntdll!LdrpValidateUserCallTarget saved in rpcrt4!__guard_check_icall_fptr with ntdll!KiFastSystemCallRet to kill the CFG check in rpcrt4.dll<br>
 3) Restore RPCRT4!__guard_check_icall_fptr memory attribute<br>
 
 ```javascript
 function killCfg(addr) {
-	var cfgobj = new CFGObject(addr)
-	if (!cfgobj.getCFGValue()) 
-		return
-	var guard_check_icall_fptr_address = cfgobj.getCFGAddress()
-	var KiFastSystemCallRet = getProcAddr(ntdll, 'KiFastSystemCallRet')
-	var tmpBuffer = createArrayBuffer(4)
-	call2(VirtualProtect, [guard_check_icall_fptr_address, 0x1000, 0x40, tmpBuffer])
-	write(guard_check_icall_fptr_address, KiFastSystemCallRet, 32)
-    call2(VirtualProtect, [guard_check_icall_fptr_address, 0x1000, read(tmpBuffer, 32), tmpBuffer])
-    map.delete(tmpBuffer)
+  var cfgobj = new CFGObject(addr)
+  if (!cfgobj.getCFGValue()) 
+    return
+  var guard_check_icall_fptr_address = cfgobj.getCFGAddress()
+  var KiFastSystemCallRet = getProcAddr(ntdll, 'KiFastSystemCallRet')
+  var tmpBuffer = createArrayBuffer(4)
+  call2(VirtualProtect, [guard_check_icall_fptr_address, 0x1000, 0x40, tmpBuffer])
+  write(guard_check_icall_fptr_address, KiFastSystemCallRet, 32)
+  call2(VirtualProtect, [guard_check_icall_fptr_address, 0x1000, read(tmpBuffer, 32), tmpBuffer])
+  map.delete(tmpBuffer)
 } 
 ```
-<br>
-After solving the two problems, the fake RPC_MESSAGE can be used to invoke any function including the buffer stores the shellcode because CFG check in rpcrt4.dll has been killed. At last, the sample writes the shellcode to the location of msi.dll + 0x5000, and invokes the shellcode through rpcrt4!NdrServerCall2 finally:<br>
+
+After solving the two problems, the fake RPC_MESSAGE can be used to invoke any function pointer including the buffer stores the shellcode, because CFG check in rpcrt4.dll has been killed. <br>
+At last, the sample writes the shellcode to the location of msi.dll + 0x5000, and invokes the shellcode through rpcrt4!NdrServerCall2 finally:<br>
 
 ```javascript
 var shellcode = new Uint8Array([0xcc])
@@ -110,13 +111,12 @@ writeData(msi, shellcode)
 call2(VirtualProtect, [msi, shellcode.length, read(tmpBuffer, 32), tmpBuffer])
 call2(msi, [])
 ```
-<br>
 
 The exploitation screenshot:<br>
 ![avatar](/images/RPC-Bypass-CFG/10.png)<br><br>
 
 ## Some thoughts
-A new method to bypass CFG mitigation by exploiting Windows RPC used in CVE-2021-26411 in the wild sample. This exploitation technology does not need to construct ROP chain, and achieve arbitrary code execution directly by fake RPC_MESSAGE. This exploitation technology is simple and stable. It is reasonable to believe that it will become a new and effective exploitation technology to bypass CFG mitigation.
+A new method to bypass CFG mitigation by exploiting Windows RPC exposed in CVE-2021-26411 in the wild sample. This exploitation technology does not need to construct ROP chain, and achieve arbitrary code execution directly by fake RPC_MESSAGE. This exploitation technology is simple and stable. It is reasonable to believe that it will become a new and effective exploitation technology to bypass CFG mitigation.
 
 ## References
 [1] https://docs.microsoft.com/en-us/windows/win32/secbp/control-flow-guard<br>
