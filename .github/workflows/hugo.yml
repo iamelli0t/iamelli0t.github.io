@@ -1,0 +1,72 @@
+# Deploys the Hugo build to GitHub Pages via the official Pages pipeline: build the site,
+# upload it as a Pages artifact, deploy that artifact.
+# Requires Settings -> Pages -> Build and deployment -> Source to be set to "GitHub Actions".
+# Hugo is downloaded straight from the official release page instead of a third-party action,
+# keeping the supply chain and upstream-maintenance risk out of the build.
+
+name: Deploy Hugo site to Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Kept in step with the local Homebrew version; verify locally before bumping.
+  HUGO_VERSION: "0.166.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Setup Hugo
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/hugo.tar.gz \
+            "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_Linux-64bit.tar.gz"
+          tar -xzf /tmp/hugo.tar.gz -C /tmp
+          sudo install /tmp/hugo /usr/local/bin/hugo
+          hugo version
+
+      - name: Build with Hugo
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_url }}
+        run: hugo --minify --baseURL "$BASE_URL"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

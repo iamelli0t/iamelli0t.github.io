@@ -1,0 +1,31 @@
+/* Header layout swapped: the avatar and name (.logo) sit at the right end, the menu on the
+   left. The theme puts .logo left and #menu right by default. */
+
+.header-nav {
+    flex-direction: row-reverse;
+}
+
+/* Header social icons (inserted by the site-level override in layouts/_partials/header.html):
+   shrunk to match the theme toggle button — the default 26px icon plus 10px padding is too
+   large in the header. */
+.logo .social-icons {
+    display: flex;
+    align-items: center;
+}
+
+.logo .social-icons a {
+    padding: 3px;
+    color: var(--secondary);
+}
+
+.logo .social-icons a svg {
+    width: 17px;
+    height: 17px;
+}
+
+/* First post card on the homepage: the theme gives it the first-entry class (320px min-height,
+   vertically centred), which is too loose next to the other cards. */
+.first-entry {
+    min-height: unset;
+    margin: var(--gap) 0 var(--gap) 0;
+}

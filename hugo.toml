@@ -1,0 +1,117 @@
+# Migrated from the Jekyll Hamilton theme (the site was last updated 2021-08) and rebuilt
+# on Hugo + PaperMod in 2026-09.
+# The theme is vendored under themes/hugo-PaperMod/ at master@d376885, the revision that
+# supports Hugo 0.146+'s new template system.
+# Requires Hugo >= 0.146.0 (the Homebrew hugo is fine locally; CI uses the extended build).
+
+baseURL = "https://iamelli0t.github.io/"
+defaultContentLanguage = "en"
+title = "iamelli0t's blog"
+theme = "hugo-PaperMod"
+enableRobotsTXT = true
+enableEmoji = false
+
+[pagination]
+pagerSize = 5
+
+# Keep the old date-based URLs: /2021/03/12/CVE-2021-26411.html -> /2021/03/12/CVE-2021-26411/
+# Use :filename (file name without extension), not :title (which slugifies the whole title).
+[permalinks]
+posts = "/:year/:month/:day/:filename/"
+
+[outputs]
+home = ["HTML", "RSS", "JSON"]
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      # The post bodies contain many inline <br> tags, which Goldmark drops unless this is on.
+      unsafe = true
+  [markup.highlight]
+    codeFences = true
+    guessSyntax = false
+    # Line numbers render as a <table> and get picked up by the copy button, so they are off
+    # by default; write ```cpp {linenos=true} on individual blocks when needed.
+    lineNos = false
+    noClasses = false
+    style = "monokai"
+    tabWidth = 4
+
+[taxonomies]
+tag = "tags"
+category = "categories"
+
+[params]
+env = "production"
+description = "My study of vulnerability and exploit"
+author = "iamelli0t"
+defaultTheme = "auto"
+mainSections = ["posts"]
+DateFormat = "January 2, 2006"
+ShowReadingTime = true
+ShowWordCount = false
+ShowShareButtons = false
+ShowPostNavLinks = true
+ShowBreadCrumbs = true
+ShowCodeCopyButtons = true
+ShowToc = true
+TocOpen = true
+comments = false
+
+[params.assets]
+favicon = "/logo.png"
+favicon16x16 = "/favicon-16x16.png"
+favicon32x32 = "/favicon-32x32.png"
+apple_touch_icon = "/apple-touch-icon.png"
+safari_pinned_tab = "/logo.png"   # no monochrome SVG available; points at the logo and is ignored by Safari
+
+[params.label]
+text = "iamelli0t"
+icon = "/logo.png"
+iconHeight = 28
+
+# No home info card: the avatar and name live at the right end of the header (see
+# assets/css/extended/custom.css) so the homepage opens straight into the post list.
+# socialIcons render next to the name in the header.
+
+[[params.socialIcons]]
+name = "x"
+url = "https://twitter.com/iamelli0t"
+
+[[params.socialIcons]]
+name = "github"
+url = "https://github.com/iamelli0t"
+
+[params.fuseOpts]
+isCaseSensitive = false
+shouldSort = true
+location = 0
+distance = 1000
+threshold = 0.4
+minMatchCharLength = 0
+limit = 10
+keys = ["title", "permalink", "summary", "content"]
+
+[[menu.main]]
+identifier = "posts"
+name = "Posts"
+url = "/posts/"
+weight = 10
+
+[[menu.main]]
+identifier = "archives"
+name = "Archives"
+url = "/archives/"
+weight = 20
+
+[[menu.main]]
+identifier = "search"
+name = "Search"
+url = "/search/"
+weight = 30
+
+[[menu.main]]
+identifier = "about"
+name = "About"
+url = "/about/"
+weight = 40
