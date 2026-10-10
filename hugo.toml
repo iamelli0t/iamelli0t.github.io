@@ -6,10 +6,35 @@
 
 baseURL = "https://iamelli0t.github.io/"
 defaultContentLanguage = "en"
+# English stays at the site root (/2021/03/12/...); Chinese lives under /zh/.
+defaultContentLanguageInSubdir = false
 title = "iamelli0t's blog"
 theme = "hugo-PaperMod"
 enableRobotsTXT = true
 enableEmoji = false
+
+[languages]
+  [languages.en]
+    contentDir = "content/en"
+    languageName = "English"
+    weight = 1
+    title = "iamelli0t's blog"
+    [languages.en.params]
+      description = "My study of vulnerability and exploit"
+      # Shown as "English" / "中文" in the header toggle and the per-post translation list,
+      # instead of the bare language code ("En" / "Zh").
+      displayFullLangName = true
+      languageAltTitle = "English"
+  [languages.zh]
+    contentDir = "content/zh"
+    languageName = "中文"
+    weight = 2
+    title = "iamelli0t's blog"
+    [languages.zh.params]
+      description = "漏洞与利用研究"
+      displayFullLangName = true
+      languageAltTitle = "中文"
+      DateFormat = "2006 年 1 月 2 日"
 
 [pagination]
 pagerSize = 5
@@ -113,5 +138,30 @@ weight = 30
 [[menu.main]]
 identifier = "about"
 name = "About"
+url = "/about/"
+weight = 40
+
+# Chinese menu. PaperMod resolves these with absLangURL, so "/posts/" becomes /zh/posts/.
+[[languages.zh.menu.main]]
+identifier = "posts"
+name = "文章"
+url = "/posts/"
+weight = 10
+
+[[languages.zh.menu.main]]
+identifier = "archives"
+name = "归档"
+url = "/archives/"
+weight = 20
+
+[[languages.zh.menu.main]]
+identifier = "search"
+name = "搜索"
+url = "/search/"
+weight = 30
+
+[[languages.zh.menu.main]]
+identifier = "about"
+name = "关于"
 url = "/about/"
 weight = 40

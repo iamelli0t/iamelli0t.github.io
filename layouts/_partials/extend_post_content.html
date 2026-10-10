@@ -1,0 +1,50 @@
+{{- /* Loads mermaid on pages that contain a diagram: the render hook in
+       layouts/_markup/render-codeblock-mermaid.html sets "hasMermaid" on the page store.
+
+       Hangs off extend_post_content.html rather than extend_footer.html because the theme
+       calls footer.html through partialCached with a page-independent key, so anything
+       page-specific inside it gets the first page's output. This hook runs per page.
+
+       The script is vendored under static/js/ rather than pulled from a CDN — same
+       supply-chain reasoning as the Hugo download in the deploy workflow. */ -}}
+{{- if .Store.Get "hasMermaid" }}
+<script src="{{ "js/mermaid.min.js" | absURL }}"></script>
+<script>
+  (function () {
+    var blocks = Array.prototype.slice.call(document.querySelectorAll('pre.mermaid'));
+    if (!blocks.length) return;
+
+    // Mermaid replaces the <pre> contents with an <svg>, so the source has to be kept
+    // somewhere before the first render or it cannot be re-rendered on a theme switch.
+    blocks.forEach(function (b) { b.dataset.src = b.textContent; });
+
+    function isDark() {
+      var t = document.documentElement.dataset.theme;
+      if (t) return t === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    function render() {
+      blocks.forEach(function (b) {
+        b.removeAttribute('data-processed');
+        b.textContent = b.dataset.src;
+      });
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDark() ? 'dark' : 'default',
+        securityLevel: 'loose',
+        flowchart: { useMaxWidth: true },
+        fontFamily: 'inherit'
+      });
+      mermaid.run({ nodes: blocks });
+    }
+
+    render();
+
+    // Re-render in the other theme so the diagram does not keep light-mode colours
+    // on a dark page. The theme toggle writes data-theme on <html>.
+    var toggle = document.getElementById('theme-toggle');
+    if (toggle) toggle.addEventListener('click', function () { setTimeout(render, 50); });
+  })();
+</script>
+{{- end }}

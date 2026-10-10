@@ -1,3 +1,9 @@
+/* Body text: the theme ships 18px; 16px (GitHub's body size) reads better for these
+   long technical posts, in both languages. Headings keep their own sizes. */
+body {
+    font-size: 16px;
+}
+
 /* Header layout swapped: the avatar and name (.logo) sit at the right end, the menu on the
    left. The theme puts .logo left and #menu right by default. */
 

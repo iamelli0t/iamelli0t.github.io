@@ -1,0 +1,10 @@
+{{- /* Renders ```mermaid fences as <pre class="mermaid"> blocks that mermaid.js picks up,
+       and flags the page so layouts/_partials/extend_post_content.html loads the library.
+       Without this hook Goldmark emits a plain <code> block inside <pre> and the diagram
+       source renders as text.
+
+       .Inner goes through safeHTML raw, not escaped: node labels use <br/> for line
+       breaks and render inline, and escaping would turn them into visible "&lt;br/&gt;"
+       text inside the node. */ -}}
+{{- .Page.Store.Set "hasMermaid" true -}}
+<pre class="mermaid">{{ .Inner | safeHTML }}</pre>
