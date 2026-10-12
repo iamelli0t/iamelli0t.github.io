@@ -48,3 +48,60 @@
   })();
 </script>
 {{- end }}
+{{- /* [site] TOC scroll spy: marks the heading currently in view as .active in the
+       table of contents. One behaviour for both TOC layouts — the fixed side TOC on
+       wide screens and the theme's default top-of-post one below the breakpoint are
+       the same markup. Styled by .toc .inner a.active in assets/css/extended/site.css. */ -}}
+<script>
+  (function () {
+    var toc = document.querySelector('details.toc');
+    if (!toc) return;
+
+    // Hugo keeps non-ASCII heading ids, so the href fragment can be percent-encoded
+    // in the DOM — decode before getElementById.
+    var links = Array.prototype.slice.call(toc.querySelectorAll('.inner a[href^="#"]'));
+    var headings = links.map(function (a) {
+      return document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)));
+    }).filter(Boolean);
+    if (!headings.length) return;
+
+    var inner = toc.querySelector('.inner');
+
+    function setActive() {
+      // The section in view is the last heading that has crossed the line 96px from
+      // the viewport top (below the sticky-free header).
+      var current = -1;
+      for (var i = 0; i < headings.length; i++) {
+        if (headings[i].getBoundingClientRect().top <= 96) current = i;
+        else break;
+      }
+      // A short final section may never reach that line; at page bottom force it on.
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+        current = headings.length - 1;
+      }
+
+      links.forEach(function (a, i) { a.classList.toggle('active', i === current); });
+
+      // Keep the active item visible inside the scrollable side TOC. Done by hand on
+      // inner.scrollTop so the page itself never scrolls as a side effect.
+      if (current > -1 && inner) {
+        var box = inner.getBoundingClientRect();
+        var rect = links[current].getBoundingClientRect();
+        if (rect.top < box.top || rect.bottom > box.bottom) {
+          inner.scrollTop += rect.top - box.top - box.height / 2 + rect.height / 2;
+        }
+      }
+    }
+
+    var ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () { setActive(); ticking = false; });
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll, { passive: true });
+    setActive();
+  })();
+</script>

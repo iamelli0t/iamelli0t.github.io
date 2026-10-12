@@ -35,3 +35,39 @@ body {
     min-height: unset;
     margin: var(--gap) 0 var(--gap) 0;
 }
+
+/* Side TOC: on wide screens the theme's <details class="toc"> (rendered by the theme's
+   toc.html above .post-content) is pinned to the empty gutter right of the 720px column,
+   so the outline stays visible while scrolling. The scroll-spy that highlights the
+   current section lives in layouts/_partials/extend_post_content.html. Below the
+   breakpoint the TOC falls back to the theme's default top-of-post collapsible box.
+   Breakpoint check: 50% + 360px (half of --main-width) + 24px (--gap) + 16px gap + 264px
+   width = 1354px < 1380px, so the TOC never overlaps the post. */
+@media (min-width: 1380px) {
+    details.toc {
+        position: fixed;
+        top: 84px;
+        left: calc(50% + var(--main-width) / 2 + var(--gap) + 16px);
+        width: 264px;
+        max-height: calc(100vh - 108px);
+        margin: 0;
+        z-index: 10;
+    }
+
+    /* Long posts: scroll inside the TOC box instead of clipping. The budget is the box
+       (100vh - 108px) minus the summary bar (~2.4rem). */
+    details.toc .inner {
+        max-height: calc(100vh - 108px - 2.4rem);
+        overflow-y: auto;
+        scrollbar-width: thin;
+    }
+}
+
+/* Scroll-spy highlight for the current section, shared by the side TOC and the
+   narrow-screen top TOC (both are the same .toc markup). --primary is the theme's
+   body-text/heading colour, so the active item reads as "foreground" against the
+   --secondary tone of the idle links. */
+.toc .inner a.active {
+    color: var(--primary);
+    font-weight: 600;
+}
