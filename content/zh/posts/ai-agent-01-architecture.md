@@ -278,7 +278,7 @@ Codex 桌面版在 macOS 上是 ChatGPT.app，应用挂着 ChatGPT 的名字，�
     <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">remote API · provider configurable</text>
     <rect x="250" y="438" width="400" height="64" rx="12" fill="rgba(247,223,168,0.35)" stroke="#c9a53f" stroke-opacity="0.9" stroke-width="1.6"/>
     <text x="450" y="465" text-anchor="middle" font-size="16.5" font-weight="600">L4 Permission Check</text>
-    <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">hooks → Guardian → user · approval_policy 四档</text>
+    <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">hooks → Guardian → user · approval_policy 4 levels</text>
     <rect x="250" y="534" width="400" height="64" rx="12" fill="rgba(127,127,127,0.09)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.6"/>
     <text x="450" y="561" text-anchor="middle" font-size="16.5" font-weight="600">L5 Tools</text>
     <text x="450" y="583" text-anchor="middle" font-size="11" opacity="0.75">shell · apply_patch · web_search · MCP · code-mode</text>
