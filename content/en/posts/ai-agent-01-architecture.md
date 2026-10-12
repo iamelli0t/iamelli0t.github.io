@@ -8,9 +8,9 @@ TocOpen: true
 url: /ai-agent-security/01/
 ---
 
-Since 2025, mainstream coding agents have entered a period of frequent severe-vulnerability disclosures: Claude Code, Codex, Cursor, Gemini CLI, and GitHub Copilot have each produced vulnerabilities that a malicious repository can trigger remotely. In Claude Code's CVE-2025-59536, hooks configuration shipped by a malicious repository executed before the trust dialog appeared [1]; in Codex CLI's CVE-2025-61260, project-local MCP configuration was auto-loaded, so cloning a single repository handed over execution and the GitHub token [2]; in Cursor's DuneSlide (CVE-2026-50548/49), the sandbox write allowlist was built from model-supplied parameters, letting injected content point the allowlist at the sandbox executor itself [4].
+Since 2025, mainstream coding agents have entered a period of frequent severe-vulnerability disclosures: Claude Code, Codex, Cursor, Gemini CLI, and GitHub Copilot have each produced vulnerabilities that a malicious repository can trigger remotely. In Claude Code's CVE-2025-59536, once the user clicked through the trust dialog, hooks configuration shipped by a malicious repository executed without any per-command confirmation [1]; in Codex CLI's CVE-2025-61260, project-local MCP configuration was auto-loaded, so cloning a single repository handed over execution and the GitHub token [2]; in Cursor's DuneSlide (CVE-2026-50548/49), the sandbox write allowlist was built from model-supplied parameters, letting injected content point the allowlist at the sandbox executor itself [4].
 
-In Gemini CLI's CVE-2026-12537, workspace-trust evaluation and the tool allowlist were both bypassed, ending in command injection in the container launcher [5]; in GitHub Copilot's CVE-2025-53773, a malicious repository wrote autoApprove into settings, dropping the agent straight into fully automatic mode [6]. In September 2026, Codex disclosed two further sandbox escapes without CVE IDs, Heapjack and Overpatch, whose shared root cause is that the sandbox's enforcement mechanism lives in the same trust domain as the code it constrains [3].
+In Gemini CLI's CVE-2026-12537, .gemini/.env configuration carried by the repository was treated as trusted before the sandbox was established, ending in command injection in the container launcher [5]; in GitHub Copilot's CVE-2025-53773, a malicious repository wrote autoApprove into settings, dropping the agent straight into fully automatic mode [6]. In September 2026, Codex disclosed two further sandbox escapes without CVE IDs, Heapjack and Overpatch, whose shared root cause is that the sandbox's enforcement mechanism lives in the same trust domain as the code it constrains [3].
 
 The immediate root causes differ, spanning execution timing, configuration auto-loading, sandbox construction, trust evaluation, and allowlist parsing, yet the failures concentrate in a handful of components: configuration loading, permission checking, the sandbox boundary, and the framework's own code. The concentration is not accidental; it follows directly from the agent's internal structure. To answer why the failures land on exactly these components, the agent first has to be taken apart: what it consists of, which inputs can reach it, and how many checkpoints stand in between.
 
@@ -87,7 +87,7 @@ The industry has a ready-made summary of this class of risk: the Lethal Trifecta
   <rect x="30" y="95" width="170" height="90" rx="18" fill="rgba(212,60,60,0.10)" stroke="#d43c3c" stroke-opacity="0.8" stroke-width="2"/>
   <g fill="currentColor" text-anchor="middle" font-weight="600"><text x="115" y="133" font-size="19">Attacker</text><text x="115" y="160" font-size="14" font-weight="400">payload</text></g>
   <rect x="400" y="60" width="260" height="160" rx="20" fill="rgba(127,127,127,0.10)" stroke="currentColor" stroke-opacity="0.85" stroke-width="2.5"/>
-  <g fill="currentColor" text-anchor="middle"><text x="530" y="122" font-size="22" font-weight="700">Agent</text><text x="530" y="152" font-size="14">context: flat token stream</text><text x="530" y="174" font-size="13" opacity="0.75">(no source tags)</text></g>
+  <g fill="currentColor" text-anchor="middle"><text x="530" y="122" font-size="22" font-weight="700">Agent</text><text x="530" y="152" font-size="14">context: one conversation</text><text x="530" y="174" font-size="13" opacity="0.75">(roles kept · no trust boundary)</text></g>
   <rect x="400" y="390" width="260" height="100" rx="18" fill="rgba(88,178,128,0.14)" stroke="#58b280" stroke-opacity="0.8" stroke-width="2"/>
   <g fill="currentColor" text-anchor="middle"><text x="530" y="428" font-size="18" font-weight="600">Sensitive data</text><text x="530" y="455" font-size="14">local files · credentials</text><text x="530" y="475" font-size="14">repo secrets</text></g>
   <rect x="850" y="95" width="170" height="90" rx="18" fill="rgba(96,146,220,0.14)" stroke="#6c8ebf" stroke-opacity="0.8" stroke-width="2"/>
@@ -100,7 +100,7 @@ The industry has a ready-made summary of this class of risk: the Lethal Trifecta
   <text x="525" y="30" text-anchor="middle" fill="#d43c3c" font-size="17" font-weight="700">All three present: attacker's content in, your data out, one session</text>
 </svg>
 
-The trifecta's three conditions map exactly onto the two facts above: untrusted content influencing decisions is the first fact, and full privileges cover the other two (sensitive data readable, an outbound channel available). It answers whether an attack chain can hold; where the break-in happens and why the defenses fail to intercept it, it does not answer, and those two questions are the subject of the articles that follow. The final article returns here.
+The trifecta's three conditions map onto the two facts above: untrusted content influencing decisions is the first fact, and full privileges make the other two usually hold (file reads are unrestricted by default, and the outbound channels, networked commands, MCP, and browsers, mostly sit outside the boundaries). It answers whether an attack chain can hold; where the break-in happens and why the defenses fail to intercept it, it does not answer, and those two questions are the subject of the articles that follow. The final article returns here.
 
 ## Anatomy of an AI Agent
 
@@ -126,7 +126,7 @@ Viewed as a whole, a running agent passes each request through six layers betwee
     <text x="450" y="295" text-anchor="middle" font-size="12" opacity="0.75">main loop · context · sub-agents</text>
     <rect x="250" y="342" width="400" height="64" rx="12" fill="rgba(127,127,127,0.09)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.6" stroke-dasharray="6 4"/>
     <text x="450" y="369" text-anchor="middle" font-size="16.5" font-weight="600">L3 Model</text>
-    <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">reasoning · stateless</text>
+    <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">reasoning · outside harness control</text>
     <rect x="250" y="438" width="400" height="64" rx="12" fill="rgba(247,223,168,0.35)" stroke="#c9a53f" stroke-opacity="0.9" stroke-width="1.6"/>
     <text x="450" y="465" text-anchor="middle" font-size="16.5" font-weight="600">L4 Permission Check</text>
     <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">allow / ask / deny</text>
@@ -134,7 +134,7 @@ Viewed as a whole, a running agent passes each request through six layers betwee
     <text x="450" y="561" text-anchor="middle" font-size="16.5" font-weight="600">L5 Tools</text>
     <text x="450" y="583" text-anchor="middle" font-size="12" opacity="0.75">read / write / exec / network</text>
     <rect x="250" y="650" width="220" height="64" rx="12" fill="rgba(88,178,128,0.14)" stroke="#58b280" stroke-width="1.6"/>
-    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Memory + Storage</text>
+    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Persistent State</text>
     <text x="360" y="699" text-anchor="middle" font-size="11.5" opacity="0.75">memory · logs · credentials</text>
     <rect x="500" y="740" width="150" height="66" rx="12" fill="rgba(150,115,220,0.18)" stroke="#9673a6" stroke-width="1.8" stroke-dasharray="6 4"/>
     <text x="575" y="767" text-anchor="middle" font-size="15.5" font-weight="600">Sandbox</text>
@@ -217,43 +217,40 @@ Viewed as a whole, a running agent passes each request through six layers betwee
 
 **L2, the orchestration layer**, is the agent's main loop. It maintains the message history and, each turn, assembles the system prompt, tool definitions, conversation record, and tool results into one request to the model, while also handling context compaction and spawning sub-agents. All inputs, whether system prompts, tool definitions, or external content, converge into a single context at this layer.
 
-**L3, the model layer**, does the reasoning, as a remote API or local weights. Each inference call is stateless; the context that survives across turns lives in L2, not on the model side. The diagram draws it with a dashed border because it is the only component the harness does not control. The harness is the code wrapping the model, responsible for assembling requests, executing tools, and managing state; the industry also calls it the framework, and the series uses harness throughout.
+**L3, the model layer**, does the reasoning, as a remote API or local weights. The conversation state that survives across turns is held by L2 and reassembled into every request; the inference service itself may keep server-side state or caches, but the logical conversation state belongs to the harness. The diagram draws it with a dashed border because it is the only layer of the six whose internal process the harness does not control: the harness decides what goes in and what comes back, while the reasoning inside the model happens beyond that reach. The harness is the code wrapping the model, responsible for assembling requests, executing tools, and managing state; the industry also calls it the framework, and the series uses harness throughout.
 
-**L4, the permission-check layer**, sits between the model and the tools: every tool call the model makes must pass through it, and its verdict is one of allow, ask, or deny. The verdict follows permission rules and approval policies delivered from the config plane, not the model's own judgment.
+**L4, the permission-check layer**, sits between the model and the tools: every tool call the model makes must pass through it, and its verdict is one of allow, ask, or deny. The verdict follows permission rules and approval policies delivered from the config plane, not the model's own judgment. The six layers are functional stages along the request path, not six separate processes; the decision logic is implemented inside the harness, in the same codebase as the main loop, and products differ only in how the decision stage is composed.
 
-**L5, the tools layer**, is the agent's only point of action. The tool registry lives here, registering every interface the model can call. What an agent can actually do is decided by which tools this layer registers: registering an MCP server adds an entire external data path to the agent.
+**L5, the tools layer**, is the only exit through which the model acts on the execution environment. The tool registry lives here, registering every interface the model can call. The model's influence has more than this one channel: text it outputs directly is rendered by L1 to the user, passing through no tool, and this presentation channel to the human can likewise change what the human does. What an agent can actually do is decided by which tools this layer registers: registering an MCP server adds an entire external data path to the agent.
 
-**L6, the memory and storage layer**, holds persistent state: project memory, global memory, session records, and credentials. This state survives across sessions; what one session writes is still there in the next. Credentials are stored only at this layer and are used during execution in L5.
+**L6, the persistent-state layer**, holds state that survives across sessions: project memory, global memory, session records, and credentials; what one session writes is still there in the next. Credentials are stored and retrieved through this layer (the form varies by product, encrypted files and the system keychain both being common) and are used during execution in L5.
 
 ### Tool Effects and the Shell Tool
 
-Tools are the agent's only way of acting on the environment, and by effect they fall into four classes.
+Tools are the agent's only way of acting on the execution environment, and by effect they fall into four classes.
 
-1) Read tools acquire information about the environment and are the agent's channel for perceiving the outside world.
-
-2) Write tools modify environment state, covering every persistent operation from editing files to committing code.
-
-3) Exec tools run code or processes and carry the most directly destructive potential in an agent's behavior.
-
-4) Communication tools handle network I/O and determine whether the agent can exchange data with the outside.
+- Read tools acquire information about the environment and are the agent's channel for perceiving the outside world.
+- Write tools modify environment state, covering every persistent operation from editing files to committing code.
+- Exec tools run code or processes and carry the most directly destructive potential in an agent's behavior.
+- Communication tools handle network I/O and determine whether the agent can exchange data with the outside.
 
 The four classes are not independent: the attack exits of data exfiltration, C2 channels, and lateral movement are all assembled from communication combined with read or exec.
 
-The shell tool is the convergence point of the four effect classes and the hardest object for permission checking to cover. A single shell command can read files, modify configuration, execute scripts, and communicate outward all at once, and its parameter space is the entire shell language. Permission checking can only perform lexical analysis on it, and lexical analysis does not line up with semantics: the same command has a hundred spellings, and what the parser sees and what the shell actually executes can be two different things. A large share of permission-bypass vulnerabilities originates here, and so does the industry's special treatment of the shell tool: command allowlists, prefix parsing, and mandatory sandboxing are all measures aimed at this one tool.
+The shell tool is the convergence point of the four effect classes and the hardest object for permission checking to cover. A single shell command can read files, modify configuration, execute scripts, and communicate outward all at once, and its parameter space is the entire shell language. Static rules and lexical matching cannot cover its dynamic semantics: the same command has a hundred spellings, and what the parser sees and what the shell actually executes can be two different things. Model-based review such as Guardian and command-policy engines reduce the risk but do not provide complete semantic understanding. A large share of permission-bypass vulnerabilities originates here, and so does the industry's special treatment of the shell tool: command allowlists, prefix parsing, and mandatory sandboxing are all measures aimed at this one tool.
 
-### Two Components Off the Request Path
+### Two Cross-Layer Components: the Config Plane and the Sandbox
 
-Beyond the six layers sit two more components, not on the request path yet deciding how that path behaves.
+Beyond the six layers sit two more components, one off the request path and one on the execution path, each deciding how that path behaves.
 
 The config plane is the agent's control plane. Its content falls into four classes: component registration decides which tools exist; permission policies decide how the check evaluates; event hooks define which events trigger which commands; runtime parameters specify the model endpoint and how credentials are obtained. Configuration taking effect is control: whatever tools are registered, the agent can do; whatever rules are written, those actions run without confirmation.
 
 Configuration has one further property: whether a config file is trustworthy depends on the path it was written through, not on its content, and the less trustworthy the write path, the less trustworthy the file. The same config file means something completely different when it ships as a built-in default and when it arrives from a freshly cloned repository. The trust gradient runs in roughly five tiers, from built-in, enterprise-managed, user-directory, and project-directory to marketplace auto-install; the farther along, the less trustworthy, and what agents load most often is precisely the latter tiers. The trust-confirmation mechanisms already in products, VS Code's workspace trust, JetBrains' trusted projects, Claude Code's directory-trust confirmation, cover only the project-directory tier.
 
-The sandbox is the enforcement boundary at execution time. It does not judge whether an action is good; it only bounds what execution can touch: how far the writable range reaches, whether the network is available, whether credentials are visible inside the boundary. The sandbox is implemented by mandatory mechanisms the operating system provides, not by the harness itself: Seatbelt on macOS, bubblewrap or Landlock plus seccomp on Linux, restricted tokens on Windows, and containers; the harness configures and invokes it. The sandbox meets L5 at the execution step: a command the model initiates passes through the sandbox before it reaches external systems, which is what the all exec arrow from L5 to the sandbox in the overview diagram says; the writable range of the write path is likewise defined by sandbox policy.
+The sandbox is the enforcement boundary at execution time, sitting on the execution path of the actions it constrains. It does not judge whether an action is good; it only bounds what execution can touch: how far the writable range reaches, whether the network is available, whether credentials are visible inside the boundary. The enforcement mechanisms come from the operating system: Seatbelt on macOS, bubblewrap or Landlock plus seccomp on Linux, restricted tokens on Windows, and containers; but generating the policy, choosing which tools are constrained, and composing the boundaries remain the responsibility of the harness and the tool layer, and sandbox vulnerabilities tend to live in that control logic rather than in the OS primitives. The sandbox meets L5 at the execution step: a command the model initiates passes through the sandbox before it reaches external systems, which is what the all exec arrow from L5 to the sandbox in the overview diagram says; the writable range of the write path is likewise defined by sandbox policy. Note the coverage: this boundary wraps only the command-execution channel; MCP servers, hook commands, browser traffic, and the agent's own API calls never pass through it.
 
 ### Codex Desktop as the Worked Example
 
-Codex Desktop is ChatGPT.app on macOS, carrying the ChatGPT name while its bundle identifier (com.openai.codex) reads Codex. The application consists of a closed-source part and an open-source part: the Electron shell is closed, and its contents sit inside the application bundle, viewable by anyone who installs the app; the embedded core is open, readable in the openai/codex repository. Layers L2 through L6 all live in the core; only L1 belongs to the shell. What follows dissects it layer by layer from public documentation [8], the public repository, and the application bundle contents; the structure and data paths:
+Codex Desktop is ChatGPT.app on macOS, carrying the ChatGPT name while its bundle identifier (com.openai.codex) reads Codex. The application consists of a closed-source part and an open-source part: the Electron shell is closed, and its contents sit inside the application bundle, viewable by anyone who installs the app; the embedded core is open, readable in the openai/codex repository. Layers L2 through L6 logically live in the core; only L1 belongs to the shell. That is logical ownership, not a deployment boundary: L3 is a remote service, MCP servers are separate child processes, and credential passphrases sit in the system keychain; what the core provides is the coordination. What follows dissects it layer by layer from public documentation [8], the public repository, and the application bundle contents; the structure and data paths:
 
 <svg viewBox="0 0 900 960" width="620" style="display:block;max-width:100%;height:auto;margin:1.2rem auto" role="img" aria-label="Codex desktop architecture">
   <!-- 对称布局:主链居中,左栏 Environment / 右栏 Config 等高框外互为镜像;左带两条虚回线,跳弧表示跨线不相连 -->
@@ -278,12 +275,12 @@ Codex Desktop is ChatGPT.app on macOS, carrying the ChatGPT name while its bundl
     <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">remote API · provider configurable</text>
     <rect x="250" y="438" width="400" height="64" rx="12" fill="rgba(247,223,168,0.35)" stroke="#c9a53f" stroke-opacity="0.9" stroke-width="1.6"/>
     <text x="450" y="465" text-anchor="middle" font-size="16.5" font-weight="600">L4 Permission Check</text>
-    <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">hooks → Guardian → user · approval_policy 4 levels</text>
+    <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">hooks → Guardian → user · approval_policy input</text>
     <rect x="250" y="534" width="400" height="64" rx="12" fill="rgba(127,127,127,0.09)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.6"/>
     <text x="450" y="561" text-anchor="middle" font-size="16.5" font-weight="600">L5 Tools</text>
     <text x="450" y="583" text-anchor="middle" font-size="11" opacity="0.75">shell · apply_patch · web_search · MCP · code-mode</text>
     <rect x="250" y="650" width="220" height="64" rx="12" fill="rgba(88,178,128,0.14)" stroke="#58b280" stroke-width="1.6"/>
-    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Memory + Storage</text>
+    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Persistent State</text>
     <text x="360" y="699" text-anchor="middle" font-size="11.5" opacity="0.75">rollout · sqlite · memories · auth</text>
     <rect x="500" y="740" width="150" height="66" rx="12" fill="rgba(150,115,220,0.18)" stroke="#9673a6" stroke-width="1.8" stroke-dasharray="6 4"/>
     <text x="575" y="767" text-anchor="middle" font-size="15.5" font-weight="600">Sandbox</text>
@@ -367,9 +364,9 @@ The complete task flow (desktop):
 2. The user types a task in the window; the shell hands it to the core, and the session main loop takes over (mostly in codex-rs's core crate). Each turn assembles the system prompt, AGENTS.md, tool definitions, and conversation history into one request.
 3. AGENTS.md enters the context at this step: the global ~/.codex/AGENTS.md is read first, then the walk proceeds from the repository root down to the current directory, taking at most one file per directory and concatenating them; skills (SKILL.md prompt packs with attached executable scripts) load at this step as well. Any instruction carried inside the project directory enters the model's context this way.
 4. The request goes to the remote model service, which returns tool calls.
-5. The check. A command must clear three checkpoints: the PermissionRequest stage of hooks runs first, Guardian (a built-in model-based review that scores commands) sits in the middle, and the approval_policy closes, deciding between auto-approval and a prompt. approval_policy has four tiers, untrusted, on-failure, on-request, and never, and version-controlled directories default to the Auto profile (workspace-write plus on-request): writes outside the workspace and network-requiring commands both ask the user, while non-version-controlled directories default to read-only. How the approval is presented varies with the frontend: a command-line confirmation in the terminal, a dialog in the application window on the desktop, while whether to approve is still decided by the core logic.
-6. Execution. Commands go into the sandbox before running: Seatbelt on macOS (via sandbox-exec with a generated policy), Landlock plus seccomp on Linux, restricted tokens on Windows, with two further backends, a firewall and the Microsoft eXecution Container (Microsoft's open-source sandbox execution framework). The writable range of workspace-write is the workspace plus the temporary directory. A command's network access is a separate boundary, allowlisted per domain through a built-in proxy; it substitutes for the file boundary in neither direction, and defaults to locked down as well.
-7. Tool results are folded back into the context for the next turn. All state lands in ~/.codex: session records (rollout files) and the sqlite state database, with login credentials and persistent memory in the same directory, shared with the CLI.
+5. The check. The PermissionRequest stage of hooks runs first, and a hook's allow or deny decision is adopted as-is; without one, the approval_policy determines whether the action needs further review, and if so, Guardian (a built-in model-based review that scores commands) or the user provides it. The approval_policy is a policy input, not another checkpoint queued behind Guardian; the current version offers three tiers, on-request (the default), granular, and never, with on-failure folded into on-request (kept only as an alias for old configurations) and untrusted demoted to an internal policy applied when a project is marked untrusted. Version-controlled directories default to the Auto profile (workspace-write plus on-request): writes outside the workspace and network-requiring commands both ask the user, while non-version-controlled directories default to read-only. How the approval is presented varies with the frontend: a command-line confirmation in the terminal, a dialog in the application window on the desktop, while whether to approve is still decided by the core logic.
+6. Execution. Commands go into the sandbox before running: Seatbelt on macOS (via sandbox-exec with a generated policy), Landlock plus seccomp on Linux, restricted tokens on Windows, with two further backends, a firewall and the Microsoft eXecution Container (Microsoft's open-source sandbox execution framework). The writable range of workspace-write is the workspace plus the temporary directory. A command's network access is a separate boundary, allowlisted per domain through a built-in proxy; it substitutes for the file boundary in neither direction, and defaults to locked down as well; this proxy boundary likewise covers only sandboxed commands, and MCP, web_search, and browser traffic never pass through it.
+7. Tool results are folded back into the context for the next turn. All state lands in ~/.codex: session records (rollout files) and the sqlite state database, with login credentials and persistent memory managed from the same directory (credentials themselves are encrypted files, with the decryption passphrase in the system keychain), shared with the CLI.
 
 What the desktop app adds over the CLI lies almost entirely in L1: graphical interface, login, the built-in browser view, system notifications, auto-update. This layer's code is not in the open-source repository, but Electron applications package their UI code inside app.asar.
 
@@ -380,11 +377,11 @@ Back to the overview diagram, cell by cell:
 | L1 UI | Electron shell: a Chromium renderer draws the interface while the main process manages windows, login, the built-in browser view, and auto-update; the shell hands tasks to the embedded core |
 | L2 Orchestration | the session main loop inside the embedded core (codex-rs's core crate); AGENTS.md enters the context during request assembly |
 | L3 Model | remote model service (OpenAI by default, provider configurable) |
-| L4 Permission check | the hooks → Guardian → approval_policy stack; the approval_policy tiers decide auto-approval or a prompt; the approval dialog is a window in the application |
+| L4 Permission check | hooks → Guardian → user approval; approval_policy is the policy input deciding whether further review is needed (currently on-request / granular / never); the approval dialog is a window in the application |
 | L5 Tools | shell (persistent session and one-shot commands), apply_patch, web_search, MCP servers, code-mode (V8) |
-| L6 Memory and storage | rollout session records, sqlite state database, memories, login credentials (~/.codex) |
+| L6 Persistent state | rollout session records, sqlite state database, memories, login credentials (~/.codex) |
 | Config plane | ~/.codex/config.toml; enterprise managed_config / MDM take priority |
-| Sandbox | read-only / workspace-write / danger-full-access profiles; Seatbelt on macOS, Landlock/seccomp on Linux, restricted tokens on Windows; the network boundary is independent, allowlisted per domain through a built-in proxy |
+| Sandbox | read-only / workspace-write / danger-full-access profiles; Seatbelt on macOS, Landlock/seccomp on Linux, restricted tokens on Windows; the network boundary is independent, allowlisted per domain through a built-in proxy, covering sandboxed commands only |
 
 Claude Code has the same shape: settings.json corresponds to the config plane, the allow/deny rules under permissions are L4's decision input, and hooks are the config plane's event hooks [9]. The CVE-2025-59536 mentioned at the opening failed exactly in the hooks field.
 
@@ -392,19 +389,19 @@ Claude Code has the same shape: settings.json corresponds to the config plane, t
 
 With the structure taken apart, two conclusions follow, both arising from how the structure itself works rather than from implementation bugs, and every attack surface derived later starts from these two.
 
-**Structural fact 1: all external content converges, at assembly time, into one flat token stream, and provenance is lost at that step.**
+**Structural fact 1: all external content converges into one context, and source markers do not provide reliable trust isolation.**
 
-When L2 assembles a request, the system prompt, tool definitions, conversation history, tool results, and read-in files are all concatenated into one sequence with no structural source markers. The model cannot distinguish which segment is the system prompt written by the product's developers and which is a comment written by an attacker in an issue. A product can insert text like "the following is tool output," but that is a text-level convention the model has learned to follow, not a structural guarantee.
+When L2 assembles a request, the system prompt, tool definitions, conversation history, tool results, and read-in files converge into one conversation. The message interface itself preserves roles and provenance: the system prompt, user messages, and tool results each keep their place, but a role marker is not a trust boundary. The model cannot reliably tell instructions from data by their origin, and nothing guarantees that a comment an attacker wrote in an issue is treated only as data. A product can insert text like "the following is tool output," but that is a text-level convention the model has learned to follow, not a structural guarantee.
 
 Simon Willison's phrasing of the same fact: "LLMs are unable to reliably distinguish the importance of instructions based on where they came from. Everything eventually gets glued together into a sequence of tokens and fed to the model." [7]
 
-Codex's AGENTS.md is a direct example: an instruction file inside the project, whose content enters the context verbatim. Clone a repository, and whatever instructions hide inside it are delivered to the model, with no way to tell who wrote them.
+Codex's AGENTS.md is a direct example: an instruction file inside the project, whose content enters the context verbatim. Clone a repository, and whatever instructions hide inside it are delivered to the model; even though the model can see the file path, the path is not a trust boundary, and injected content still shapes decisions.
 
 **Structural fact 2: the permission checkpoint covers only the model-to-action segment; content ingestion and configuration loading never pass through it.**
 
 Against the overview diagram: L4 sits between L3 and L5 and governs only the tool calls the model initiates. Content enters the context through L5's read tools or channels further upstream, and configuration loading reaches the config plane directly through the file channel; neither path crosses L4.
 
-This one is the key to understanding configuration-class vulnerabilities, and CVE-2025-59536 turns on exactly this: the hooks configuration executed before the trust dialog appeared; before the user had any chance to say "I trust this directory," the configured command had already finished. The problem is that this path lies entirely outside the check's jurisdiction, not that the check's rules were wrongly written.
+This one is the key to understanding configuration-class vulnerabilities, and CVE-2025-59536 turns on exactly this: the malicious repository wrote MCP auto-approval settings into project files, and commands executed before the user had any chance to read the trust dialog. The problem is that this path lies entirely outside the check's jurisdiction, not that the check's rules were wrongly written.
 
 ## Permission Checking and the Sandbox: Two Independent Dimensions, Not Either-Or
 

@@ -8,9 +8,9 @@ TocOpen: true
 url: /zh/ai-agent-security/01/
 ---
 
-2025 年以来，主流 coding agent 的漏洞通报进入高发期，Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot 相继出现可由恶意仓库远程触发的严重漏洞。Claude Code 的 CVE-2025-59536，恶意仓库携带的 hooks 配置先于信任对话框执行[1]；Codex CLI 的 CVE-2025-61260，项目本地的 MCP 配置被自动加载，克隆一个仓库就交出执行权与 GitHub token[2]；Cursor 的 DuneSlide（CVE-2026-50548/49），沙箱写入白名单按模型填写的参数构建，注入内容可以让白名单指向沙箱执行器本身[4]。
+2025 年以来，主流 coding agent 的漏洞通报进入高发期，Claude Code、Codex、Cursor、Gemini CLI、GitHub Copilot 相继出现可由恶意仓库远程触发的严重漏洞。Claude Code 的 CVE-2025-59536，用户点击信任确认后，仓库携带的 hooks 配置无需逐命令确认直接执行[1]；Codex CLI 的 CVE-2025-61260，项目本地的 MCP 配置被自动加载，克隆一个仓库就交出执行权与 GitHub token[2]；Cursor 的 DuneSlide（CVE-2026-50548/49），沙箱写入白名单按模型填写的参数构建，注入内容可以让白名单指向沙箱执行器本身[4]。
 
-Gemini CLI 的 CVE-2026-12537，工作区信任判断与工具白名单被绕过，最终落到容器启动器的命令注入[5]；GitHub Copilot 的 CVE-2025-53773，恶意仓库把 autoApprove 写进设置，agent 直接进入全自动模式[6]。2026 年 9 月，Codex 再披露 Heapjack 与 Overpatch 两个无 CVE 编号的沙箱逃逸漏洞，共同根因是沙箱的强制机制与被它限制的代码处在同一信任域[3]。
+Gemini CLI 的 CVE-2026-12537，仓库携带的 .gemini/.env 配置在沙箱建立前被当作可信配置处理，最终落到容器启动器的命令注入[5]；GitHub Copilot 的 CVE-2025-53773，恶意仓库把 autoApprove 写进设置，agent 直接进入全自动模式[6]。2026 年 9 月，Codex 再披露 Heapjack 与 Overpatch 两个无 CVE 编号的沙箱逃逸漏洞，共同根因是沙箱的强制机制与被它限制的代码处在同一信任域[3]。
 
 这些漏洞的直接根因各不相同，覆盖执行时序、配置自动加载、沙箱构建方式、信任判断与白名单解析，但失效位置集中在少数几个部件上：配置加载、权限判定、沙箱边界与框架自身代码。失效位置如此集中并非偶然，它与 agent 的内部结构直接相关。要回答“为什么是这几个位置”，需要先把 agent 拆开，弄清它由哪些部件组成、哪些输入能够进入、中间有几道关卡。
 
@@ -87,7 +87,7 @@ agent 改变了这个前提，网页内容、issue 评论、依赖包里的注�
   <rect x="30" y="95" width="170" height="90" rx="18" fill="rgba(212,60,60,0.10)" stroke="#d43c3c" stroke-opacity="0.8" stroke-width="2"/>
   <g fill="currentColor" text-anchor="middle" font-weight="600"><text x="115" y="133" font-size="19">Attacker</text><text x="115" y="160" font-size="14" font-weight="400">payload</text></g>
   <rect x="400" y="60" width="260" height="160" rx="20" fill="rgba(127,127,127,0.10)" stroke="currentColor" stroke-opacity="0.85" stroke-width="2.5"/>
-  <g fill="currentColor" text-anchor="middle"><text x="530" y="122" font-size="22" font-weight="700">Agent</text><text x="530" y="152" font-size="14">context: flat token stream</text><text x="530" y="174" font-size="13" opacity="0.75">(no source tags)</text></g>
+  <g fill="currentColor" text-anchor="middle"><text x="530" y="122" font-size="22" font-weight="700">Agent</text><text x="530" y="152" font-size="14">context: one conversation</text><text x="530" y="174" font-size="13" opacity="0.75">(roles kept · no trust boundary)</text></g>
   <rect x="400" y="390" width="260" height="100" rx="18" fill="rgba(88,178,128,0.14)" stroke="#58b280" stroke-opacity="0.8" stroke-width="2"/>
   <g fill="currentColor" text-anchor="middle"><text x="530" y="428" font-size="18" font-weight="600">Sensitive data</text><text x="530" y="455" font-size="14">local files · credentials</text><text x="530" y="475" font-size="14">repo secrets</text></g>
   <rect x="850" y="95" width="170" height="90" rx="18" fill="rgba(96,146,220,0.14)" stroke="#6c8ebf" stroke-opacity="0.8" stroke-width="2"/>
@@ -100,7 +100,7 @@ agent 改变了这个前提，网页内容、issue 评论、依赖包里的注�
   <text x="525" y="30" text-anchor="middle" fill="#d43c3c" font-size="17" font-weight="700">All three present: attacker's content in, your data out, one session</text>
 </svg>
 
-Trifecta 的三个条件与前文两条事实完全对应：不可信内容影响决策对应第一条，完整权限覆盖后两条（敏感数据可读、数据具备外发通道）。它回答的是攻击链能否成立；至于从哪里攻破、防线为什么拦不住，它没有回答，而这两问是后续各篇的主题，最后一篇会回到这里。
+Trifecta 的三个条件与前文两条事实对应：不可信内容影响决策对应第一条，完整权限使后两条通常成立（文件读取默认不设限，联网命令、MCP、浏览器这些外发通道多数在边界外）。它回答的是攻击链能否成立；至于从哪里攻破、防线为什么拦不住，它没有回答，而这两问是后续各篇的主题，最后一篇会回到这里。
 
 ## AI Agent 的结构剖析
 
@@ -126,7 +126,7 @@ Trifecta 的三个条件与前文两条事实完全对应：不可信内容影�
     <text x="450" y="295" text-anchor="middle" font-size="12" opacity="0.75">main loop · context · sub-agents</text>
     <rect x="250" y="342" width="400" height="64" rx="12" fill="rgba(127,127,127,0.09)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.6" stroke-dasharray="6 4"/>
     <text x="450" y="369" text-anchor="middle" font-size="16.5" font-weight="600">L3 Model</text>
-    <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">reasoning · stateless</text>
+    <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">reasoning · outside harness control</text>
     <rect x="250" y="438" width="400" height="64" rx="12" fill="rgba(247,223,168,0.35)" stroke="#c9a53f" stroke-opacity="0.9" stroke-width="1.6"/>
     <text x="450" y="465" text-anchor="middle" font-size="16.5" font-weight="600">L4 Permission Check</text>
     <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">allow / ask / deny</text>
@@ -134,7 +134,7 @@ Trifecta 的三个条件与前文两条事实完全对应：不可信内容影�
     <text x="450" y="561" text-anchor="middle" font-size="16.5" font-weight="600">L5 Tools</text>
     <text x="450" y="583" text-anchor="middle" font-size="12" opacity="0.75">read / write / exec / network</text>
     <rect x="250" y="650" width="220" height="64" rx="12" fill="rgba(88,178,128,0.14)" stroke="#58b280" stroke-width="1.6"/>
-    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Memory + Storage</text>
+    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Persistent State</text>
     <text x="360" y="699" text-anchor="middle" font-size="11.5" opacity="0.75">memory · logs · credentials</text>
     <rect x="500" y="740" width="150" height="66" rx="12" fill="rgba(150,115,220,0.18)" stroke="#9673a6" stroke-width="1.8" stroke-dasharray="6 4"/>
     <text x="575" y="767" text-anchor="middle" font-size="15.5" font-weight="600">Sandbox</text>
@@ -217,43 +217,40 @@ Trifecta 的三个条件与前文两条事实完全对应：不可信内容影�
 
 **L2 编排层**是整个 agent 的主循环，负责维护消息历史，并在每一轮把系统提示、工具定义、对话记录与工具返回结果组装成一个请求发送给模型，同时承担上下文压缩与子 agent 的派生。所有输入，无论来自系统提示、工具定义还是外部内容，最终都在这一层汇成同一个上下文。
 
-**L3 模型层**承担推理，形态为远端 API 或本地权重，每一轮推理都是无状态的，跨轮存活的上下文保存在 L2 而非模型侧。图中将其画为虚线框，因为它是整个结构里唯一不受 harness 控制的部件。harness 指包裹模型的这层代码，负责组装请求、执行工具与管理状态，业内也称为框架，全篇统一用 harness 这个词。
+**L3 模型层**承担推理，形态为远端 API 或本地权重。跨轮存活的对话状态由 L2 持有并在每次请求时重新组装送入模型；推理服务自身可以有服务端状态或缓存，逻辑上的对话状态始终归 harness 所有。图中将其画为虚线框，因为它是六层中唯一内部过程不受 harness 控制的部件：harness 决定送进去什么、拿回什么，模型内部的推理发生在控制范围之外。harness 指包裹模型的这层代码，负责组装请求、执行工具与管理状态，业内也称为框架，全篇统一用 harness 这个词。
 
-**L4 权限判定层**位于模型与工具之间：模型每一次调用工具都必须经过它，判定结果为允许、询问、拒绝三选一。判定的依据是配置面下发的权限规则与审批策略，而非模型自身的判断。
+**L4 权限判定层**位于模型与工具之间：模型每一次调用工具都必须经过它，判定结果为允许、询问、拒绝三选一。判定的依据是配置面下发的权限规则与审批策略，而非模型自身的判断。六层是请求经过的功能分段，不是六个独立进程，判定逻辑实现在 harness 内部，与主循环同处一份代码，各产品的差别只在判定环节的构成。
 
-**L5 工具层**是 agent 唯一的动作出口，工具注册表位于这一层，模型能够调用的所有接口都在这里注册。agent 实际能做什么，取决于这一层注册了哪些工具：注册一个 MCP server，就等于为 agent 增加了一整条外部数据通路。
+**L5 工具层**是模型作用于执行环境的唯一出口，工具注册表位于这一层，模型能够调用的所有接口都在这里注册。模型的影响不止这一条通道：直接输出的文本经 L1 渲染呈现给用户，不经过任何工具，这条通向人的呈现通道同样能改变人的行为。agent 实际能做什么，取决于这一层注册了哪些工具：注册一个 MCP server，就等于为 agent 增加了一整条外部数据通路。
 
-**L6 记忆与存储层**保存持久状态，包括项目记忆、全局记忆、会话记录与凭证。这些状态跨会话存活，本次会话写入的内容在下一次会话中依然存在。凭证只在这一层存放，实际使用发生在 L5 执行时。
+**L6 持久状态层**保存跨会话存活的状态，包括项目记忆、全局记忆、会话记录与凭证，本次会话写入的内容在下一次会话中依然存在。凭证经这一层存取（形态随产品而异，加密文件与系统钥匙串都常见），实际使用发生在 L5 执行时。
 
 ### 工具效果分类与 shell 工具
 
-工具是 agent 作用于环境的唯一途径，按效果分为四类。
+工具是 agent 作用于执行环境的唯一途径，按效果分为四类。
 
-1）读取类获取环境信息，是 agent 认知外部世界的通道。
-
-2）写入类修改环境状态，覆盖从编辑文件到提交代码的全部持久化操作。
-
-3）执行类运行代码或进程，是 agent 行为中破坏力最直接的一类。
-
-4）通信类负责网络收发，决定 agent 能否与外部交换数据。
+- 读取类获取环境信息，是 agent 认知外部世界的通道。
+- 写入类修改环境状态，覆盖从编辑文件到提交代码的全部持久化操作。
+- 执行类运行代码或进程，是 agent 行为中破坏力最直接的一类。
+- 通信类负责网络收发，决定 agent 能否与外部交换数据。
 
 四类效果并不彼此独立，数据外带、C2 通道、横向移动这些攻击出口，全部由通信配合读取或执行组合完成。
 
-shell 工具是四类效果的交汇点，也是权限判定最难覆盖的对象。一条 shell 命令可以同时完成读取文件、修改配置、执行脚本与对外通信，其参数空间是整个 shell 语言；权限判定面对它只能做词法解析，而词法解析与语义天然对不上：同一段命令可以有一百种写法，解析器看到的与 shell 实际执行的可以是两回事。大量判定绕过漏洞源于此处，行业对 shell 工具的单独对待也源于此处，命令白名单、前缀解析、强制沙箱等措施全部针对这一个工具而设。
+shell 工具是四类效果的交汇点，也是权限判定最难覆盖的对象。一条 shell 命令可以同时完成读取文件、修改配置、执行脚本与对外通信，其参数空间是整个 shell 语言；权限判定面对它，静态规则与词法匹配覆盖不了它的动态语义：同一段命令可以有一百种写法，解析器看到的与 shell 实际执行的可以是两回事。Guardian 这类模型审查与命令策略引擎能降低风险，但不提供完整的语义理解。大量判定绕过漏洞源于此处，行业对 shell 工具的单独对待也源于此处，命令白名单、前缀解析、强制沙箱等措施全部针对这一个工具而设。
 
-### 不在请求链上的两个部件
+### 两个跨层部件：配置面与沙箱
 
-六层之外还有两个部件，它们不在请求链上，却决定着这条链的行为。
+六层之外还有两个部件，一个不在请求链上，一个在执行链上，都决定着这条链的行为。
 
 配置面是 agent 的控制面，内容分为四类：组件注册决定注册了哪些工具，权限策略规定权限规则如何判定，事件钩子定义什么事件触发什么命令，运行参数指定模型端点与凭证的获取方式。配置生效即控制：注册了什么工具，agent 就能做什么；写入了什么权限规则，什么动作就免于确认。
 
 配置还有一个关键性质：判断一份配置可信不可信，看的是它经过什么途径写进来，与内容本身无关，写入途径越不可信，这份配置就越不可信。同一份配置，来自产品内置默认值与来自刚克隆的仓库，信任级别完全不同。信任梯度大致为五档，从内置、企业下发、用户目录、项目目录到市场自动安装，越靠后越不可信，而 agent 最常加载的正是后面几种。产品里已有的信任确认机制，VS Code 的工作区信任、JetBrains 的可信项目、Claude Code 的目录信任确认，覆盖的都只是项目目录这一档。
 
-沙箱是执行层面的约束边界。它不判断动作的好坏，只限制执行时能够触达的范围：可写范围多大、网络是否可用、凭证在边界内是否可见。沙箱由操作系统提供的强制机制实现，不由 harness 自己实现，包括 macOS 的 Seatbelt、Linux 的 bubblewrap 或 Landlock 加 seccomp、Windows 的受限令牌（restricted token），以及容器；harness 负责对它进行配置和调用。沙箱与 L5 的衔接在执行这一步：模型发起的命令在落到外部系统前先经过沙箱，总图上 L5 指向沙箱的 all exec 说的就是这个；写入路径的可写范围同样由沙箱策略界定。
+沙箱是执行层面的约束边界，位于它所约束动作的执行路径上。它不判断动作的好坏，只限制执行时能够触达的范围：可写范围多大、网络是否可用、凭证在边界内是否可见。沙箱的强制机制由操作系统提供，包括 macOS 的 Seatbelt、Linux 的 bubblewrap 或 Landlock 加 seccomp、Windows 的受限令牌（restricted token），以及容器；但策略怎么生成、哪些工具被约束、边界怎么组合，仍是 harness 与工具层的职责，沙箱漏洞往往出在这层控制逻辑而非 OS 原语本身。沙箱与 L5 的衔接在执行这一步：模型发起的命令在落到外部系统前先经过沙箱，总图上 L5 指向沙箱的 all exec 说的就是这个；写入路径的可写范围同样由沙箱策略界定。要注意覆盖范围：这条边界只盖住命令执行通道，MCP server、hooks 命令、浏览器流量与 agent 自身的 API 调用都不经过它。
 
 ### 以 Codex 桌面版为例
 
-Codex 桌面版在 macOS 上是 ChatGPT.app，应用挂着 ChatGPT 的名字，包标识（com.openai.codex）写的却是 Codex。这个应用由闭源与开源两部分组成：Electron 壳闭源，内容都在应用包目录里，装了应用就能查看；内嵌的核心开源，代码在 openai/codex 仓库中可以直接阅读。六层中的 L2 到 L6 都落在核心上，只有 L1 属于壳。以下依据公开文档[8]、公开仓库与应用包内容逐层拆解，结构与数据通路如下图：
+Codex 桌面版在 macOS 上是 ChatGPT.app，应用挂着 ChatGPT 的名字，包标识（com.openai.codex）写的却是 Codex。这个应用由闭源与开源两部分组成：Electron 壳闭源，内容都在应用包目录里，装了应用就能查看；内嵌的核心开源，代码在 openai/codex 仓库中可以直接阅读。六层中的 L2 到 L6 在逻辑上都落在核心上，只有 L1 属于壳；这是逻辑归属而非部署边界：L3 是远端服务，MCP server 是独立子进程，凭证口令存在系统钥匙串，核心负责的是协调它们。以下依据公开文档[8]、公开仓库与应用包内容逐层拆解，结构与数据通路如下图：
 
 <svg viewBox="0 0 900 960" width="620" style="display:block;max-width:100%;height:auto;margin:1.2rem auto" role="img" aria-label="Codex desktop architecture">
   <!-- 对称布局:主链居中,左栏 Environment / 右栏 Config 等高框外互为镜像;左带两条虚回线,跳弧表示跨线不相连 -->
@@ -278,12 +275,12 @@ Codex 桌面版在 macOS 上是 ChatGPT.app，应用挂着 ChatGPT 的名字，�
     <text x="450" y="391" text-anchor="middle" font-size="12" opacity="0.75">remote API · provider configurable</text>
     <rect x="250" y="438" width="400" height="64" rx="12" fill="rgba(247,223,168,0.35)" stroke="#c9a53f" stroke-opacity="0.9" stroke-width="1.6"/>
     <text x="450" y="465" text-anchor="middle" font-size="16.5" font-weight="600">L4 Permission Check</text>
-    <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">hooks → Guardian → user · approval_policy 4 levels</text>
+    <text x="450" y="487" text-anchor="middle" font-size="12" opacity="0.8">hooks → Guardian → user · approval_policy input</text>
     <rect x="250" y="534" width="400" height="64" rx="12" fill="rgba(127,127,127,0.09)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.6"/>
     <text x="450" y="561" text-anchor="middle" font-size="16.5" font-weight="600">L5 Tools</text>
     <text x="450" y="583" text-anchor="middle" font-size="11" opacity="0.75">shell · apply_patch · web_search · MCP · code-mode</text>
     <rect x="250" y="650" width="220" height="64" rx="12" fill="rgba(88,178,128,0.14)" stroke="#58b280" stroke-width="1.6"/>
-    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Memory + Storage</text>
+    <text x="360" y="677" text-anchor="middle" font-size="15" font-weight="600">L6 Persistent State</text>
     <text x="360" y="699" text-anchor="middle" font-size="11.5" opacity="0.75">rollout · sqlite · memories · auth</text>
     <rect x="500" y="740" width="150" height="66" rx="12" fill="rgba(150,115,220,0.18)" stroke="#9673a6" stroke-width="1.8" stroke-dasharray="6 4"/>
     <text x="575" y="767" text-anchor="middle" font-size="15.5" font-weight="600">Sandbox</text>
@@ -367,9 +364,9 @@ Codex 桌面版在 macOS 上是 ChatGPT.app，应用挂着 ChatGPT 的名字，�
 2. 在窗口里输入任务，壳把任务递给核心，由会话主循环接管（主体在 codex-rs 的 core crate）。每一轮把系统提示、AGENTS.md、工具定义、对话历史拼成一个请求。
 3. AGENTS.md 在这一步进上下文：先读全局的 ~/.codex/AGENTS.md，再从仓库根向下走到当前目录，每层目录最多取一个文件，拼接在一起；skills（SKILL.md 提示包，附带可执行脚本）也在这一步加载，项目目录里携带的任何指令都由此进入模型上下文。
 4. 请求发往远端模型服务，模型返回工具调用。
-5. 判定。命令要过三道关卡：hooks 的 PermissionRequest 环节先行，Guardian（内置的模型自动审查，用模型给命令评分）居中，approval_policy 收尾，由它决定自动放行还是弹出审批。approval_policy 分 untrusted、on-failure、on-request、never 四档，版本控制目录默认取 Auto 档（workspace-write 加 on-request）：工作区外的写入与需要联网的命令都问用户，非版本控制目录则默认只读。审批的呈现随界面而变：终端里是命令行确认框，桌面版是应用窗口里的对话框，批不批仍由核心逻辑决定。
-6. 执行。命令先放进沙箱再运行：macOS 用 Seatbelt（经 sandbox-exec 带上生成的策略），Linux 用 Landlock 加 seccomp，Windows 用受限令牌，另有防火墙与微软执行容器（Microsoft eXecution Container，微软开源的沙箱执行框架）两类后端。workspace-write 的可写范围是工作区加临时目录。命令的网络访问另成一条边界，经内置代理按域名放行，与文件边界互不替代，默认同样收紧。
-7. 工具结果拼回上下文，进入下一轮。整个过程的状态都落在 ~/.codex：会话记录（rollout 文件）与 sqlite 状态库，登录凭证与持久记忆也在这个目录下，与 CLI 共享。
+5. 判定。hooks 的 PermissionRequest 环节先行，hook 给出允许或拒绝就按它办；没有 hook 决定时，由 approval_policy 判断当前动作是否需要进一步审查，需要时走 Guardian（内置的模型自动审查，用模型给命令评分）或用户审批。approval_policy 是策略输入，不是排在 Guardian 后面的又一道关卡，当前版本分 on-request（默认）、granular、never 三档，on-failure 已并入 on-request（只作为旧配置的别名保留），untrusted 转为内部策略，项目被标记不可信时使用。版本控制目录默认取 Auto 档（workspace-write 加 on-request）：工作区外的写入与需要联网的命令都问用户，非版本控制目录则默认只读。审批的呈现随界面而变：终端里是命令行确认框，桌面版是应用窗口里的对话框，批不批仍由核心逻辑决定。
+6. 执行。命令先放进沙箱再运行：macOS 用 Seatbelt（经 sandbox-exec 带上生成的策略），Linux 用 Landlock 加 seccomp，Windows 用受限令牌，另有防火墙与微软执行容器（Microsoft eXecution Container，微软开源的沙箱执行框架）两类后端。workspace-write 的可写范围是工作区加临时目录。命令的网络访问另成一条边界，经内置代理按域名放行，与文件边界互不替代，默认同样收紧；这条代理边界同样只覆盖沙箱内命令，MCP、web_search 与浏览器流量不经它。
+7. 工具结果拼回上下文，进入下一轮。整个过程的状态都落在 ~/.codex：会话记录（rollout 文件）与 sqlite 状态库，登录凭证与持久记忆也由这个目录管理（凭证本体为加密文件，解密口令存在系统钥匙串），与 CLI 共享。
 
 桌面版相对 CLI 多出的部分基本都在 L1：图形界面、登录、内置浏览器视图、系统通知、自动更新。这一层的代码不在开源仓库中，但 Electron 应用将界面代码打包在 app.asar 里。
 
@@ -380,11 +377,11 @@ Codex 桌面版在 macOS 上是 ChatGPT.app，应用挂着 ChatGPT 的名字，�
 | L1 界面 | Electron 壳：Chromium 渲染进程画界面，主进程管窗口、登录、内置浏览器视图、自动更新；壳把任务递给内嵌核心 |
 | L2 编排 | 内嵌核心（codex-rs 的 core crate）里的会话主循环；AGENTS.md 在组装请求时进上下文 |
 | L3 模型 | 远端模型服务（默认 OpenAI，provider 可配） |
-| L4 判定 | 判定栈 hooks → Guardian → approval_policy；approval_policy 四档决定自动放行或弹出审批，审批框是应用窗口里的对话框 |
+| L4 判定 | hooks → Guardian → 用户审批；approval_policy 是策略输入，决定是否需要进一步审查（当前 on-request / granular / never 三档），审批框是应用窗口里的对话框 |
 | L5 工具 | shell（持久会话与一次性命令）、apply_patch、web_search、MCP server、code-mode（V8） |
-| L6 记忆与存储 | rollout 会话记录、sqlite 状态库、memories、登录凭证（~/.codex） |
+| L6 持久状态 | rollout 会话记录、sqlite 状态库、memories、登录凭证（~/.codex） |
 | 配置面 | ~/.codex/config.toml，企业 managed_config / MDM 优先级更高 |
-| 沙箱 | read-only / workspace-write / danger-full-access 三档；macOS Seatbelt、Linux Landlock/seccomp、Windows 受限令牌；网络边界独立，经内置代理按域名放行 |
+| 沙箱 | read-only / workspace-write / danger-full-access 三档；macOS Seatbelt、Linux Landlock/seccomp、Windows 受限令牌；网络边界独立，经内置代理按域名放行，只覆盖沙箱内命令 |
 
 Claude Code 与此同构：settings.json 对应配置面，permissions 中的 allow/deny 规则是 L4 的判定输入，hooks 是配置面里的事件钩子[9]。开篇提到的 CVE-2025-59536，问题正出在 hooks 字段。
 
@@ -392,19 +389,19 @@ Claude Code 与此同构：settings.json 对应配置面，permissions 中的 al
 
 结构拆解完成，得到两条结论：这两条都源于结构本身的工作方式，不是实现上的 bug，后续推导的攻击面全部从这两条出发。
 
-**结构性事实 1：所有外部内容在组装时汇成同一条平坦的 token 流，来源信息在这一步丢失。**
+**结构性事实 1：所有外部内容汇入同一个上下文，来源标记不构成可靠的信任隔离。**
 
-L2 组装请求时，系统提示、工具定义、对话历史、工具返回、读入的文件全部拼成一条序列，序列里没有结构化的来源标记。模型收到时无法区分哪段是产品开发者写的系统提示，哪段是攻击者在 issue 里写的评论。产品可以在文本中加入“以下是工具返回的内容”这类说明，但那是文本层面的约定，靠模型学习得来，不是结构保证。
+L2 组装请求时，系统提示、工具定义、对话历史、工具返回、读入的文件汇成一次对话。消息接口本身保留角色与来源信息，系统提示、用户消息、工具返回各归其位，但角色标记不等于信任边界：模型无法可靠地按来源区分指令与数据，无法保证把攻击者写在 issue 里的评论只当作数据。产品可以在文本中加入“以下是工具返回的内容”这类说明，但那是文本层面的约定，靠模型学习得来，不是结构保证。
 
 Simon Willison 对同一事实的表述："LLMs are unable to reliably distinguish the importance of instructions based on where they came from. Everything eventually gets glued together into a sequence of tokens and fed to the model."[7]
 
-Codex 的 AGENTS.md 是一个直接例子：项目里的指令文件，内容直接进入上下文。克隆一个仓库，里面藏着什么指令，模型就收到什么指令，且无从分辨这些指令来自谁。
+Codex 的 AGENTS.md 是一个直接例子：项目里的指令文件，内容直接进入上下文。克隆一个仓库，里面藏着什么指令，模型就收到什么指令；即使模型能看到文件路径，路径也不构成信任边界，注入内容照样参与决策。
 
 **结构性事实 2：判定检查点位于“模型 → 动作”这一段，内容进入与配置加载都不经过它。**
 
 对照总图：L4 位于 L3 与 L5 之间，只管辖模型发起的工具调用。内容进入上下文走的是 L5 的读取工具或更靠前的通道，配置加载走文件通道直达配置面，两条路径都不经过 L4。
 
-这一条是理解配置类漏洞的关键，CVE-2025-59536 的核心也在这里：hooks 配置在信任对话框弹出之前执行，用户还没来得及表达“我信任这个目录”，配置里的命令已经跑完。问题出在这条路径根本不在判定的管辖范围内，判定的规则本身没有写错。
+这一条是理解配置类漏洞的关键，CVE-2025-59536 的核心也在这里：仓库把自动批准 MCP server 的配置写进项目文件，命令在用户还没来得及看信任对话框时就已经执行。问题出在这条路径根本不在判定的管辖范围内，判定的规则本身没有写错。
 
 ## 判定与沙箱：两个独立的维度，而非二选一
 
