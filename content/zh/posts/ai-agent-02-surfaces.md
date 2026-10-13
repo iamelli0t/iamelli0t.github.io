@@ -10,7 +10,7 @@ url: /zh/ai-agent-security/02/
 
 2025 年 12 月，OWASP 发布 2026 版 Agentic Applications Top 10[1]，列出智能体应用的十类主要威胁，下面的推导以它为参照。
 
-第 1 篇把 agent 运行时拆成六层与两个部件，并留下两条结构性事实：结构性事实 1 是所有外部内容在组装时汇成一条没有来源标记的平坦 token 流；结构性事实 2 是判定检查点只覆盖“模型 → 动作”这一段，内容进入与配置加载都不经过它。沿着这张结构图推导，得到的攻击面与威胁清单不同：它的意义在于可检验，任何一个新漏洞、新技术出现，都能定位它落在哪个攻击面上；定位不上，则暴露的是结构图的缺口，两种结果都推进认识。推导完成后，把上一节 OWASP 给出的十类威胁逐条放回七个攻击面，威胁清单与结构图的对应关系也就清楚了。
+第 1 篇把 agent 运行时拆成六层与两个部件，并留下两条结构性事实：结构性事实 1 是所有外部内容在组装时汇成一条没有来源标记的平坦 token 流；结构性事实 2 是判定检查点只覆盖“模型 → 动作”这一段，内容进入与配置加载都不经过它。沿着这张结构图推导，得到的攻击面与威胁清单不同：它的意义在于可检验，任何一个新漏洞、新技术出现，都能定位它落在哪个攻击面上；定位不上，则暴露的是结构图的缺口，两种结果都推进认识。
 
 推导按三个问题展开：agent 的行为由哪些状态决定，执行由哪些关卡拦截；这些状态与关卡推出哪几个攻击面，各落在架构图的什么位置；一个攻击面要变成一次实际攻击，中间还差什么。
 
@@ -317,97 +317,6 @@ url: /zh/ai-agent-security/02/
 | 6 | 人机接口 | L1 | 可写入 | AutoGPT 37275 |
 | 7 | 框架与运行时 | harness 自身代码 | 可绕过 | Langflow 3248、LangGrinch 68664 |
 
-把上一节 OWASP 给出的十类威胁逐条放到七个攻击面上，对应关系如下图：
-
-<svg viewBox="0 0 860 590" width="640" style="display:block;max-width:100%;height:auto;margin:1.2rem auto" role="img" aria-label="OWASP categories mapped onto the seven surfaces">
-  <defs>
-    <marker id="arrm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
-  </defs>
-  <g fill="#d43c3c">
-    <rect x="40" y="44" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="102" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="160" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="218" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="276" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="334" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="392" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-  </g>
-  <g fill="#ffffff" text-anchor="middle" font-size="12.5" font-weight="700">
-    <text x="63" y="63">S1</text>
-    <text x="63" y="121">S2</text>
-    <text x="63" y="179">S3</text>
-    <text x="63" y="237">S4</text>
-    <text x="63" y="295">S5</text>
-    <text x="63" y="353">S6</text>
-    <text x="63" y="411">S7</text>
-  </g>
-  <g fill="currentColor" font-size="11">
-    <text x="96" y="62">context assembly</text>
-    <text x="96" y="120">config</text>
-    <text x="96" y="178">permission check</text>
-    <text x="96" y="236">sandbox</text>
-    <text x="96" y="294">persistent state</text>
-    <text x="96" y="352">UI &amp; approval</text>
-    <text x="96" y="410">framework &amp; runtime</text>
-  </g>
-  <g stroke="currentColor" stroke-width="1.6" fill="none">
-    <path d="M252,58 H294" marker-end="url(#arrm)"/>
-    <path d="M252,116 H294" marker-end="url(#arrm)"/>
-    <path d="M252,174 H294" marker-end="url(#arrm)"/>
-    <path d="M252,232 H294" marker-end="url(#arrm)"/>
-    <path d="M252,290 H294" marker-end="url(#arrm)"/>
-    <path d="M252,348 H294" marker-end="url(#arrm)"/>
-    <path d="M252,406 H294" marker-end="url(#arrm)"/>
-  </g>
-  <g fill="rgba(127,127,127,0.08)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.5">
-    <rect x="300" y="44" width="150" height="28" rx="8"/>
-    <rect x="464" y="44" width="150" height="28" rx="8"/>
-    <rect x="300" y="102" width="150" height="28" rx="8"/>
-    <rect x="464" y="102" width="150" height="28" rx="8"/>
-    <rect x="628" y="102" width="160" height="28" rx="8"/>
-    <rect x="300" y="276" width="150" height="28" rx="8"/>
-    <rect x="464" y="276" width="150" height="28" rx="8"/>
-    <rect x="300" y="334" width="150" height="28" rx="8"/>
-    <rect x="300" y="392" width="150" height="28" rx="8"/>
-  </g>
-  <g fill="currentColor" text-anchor="middle" font-size="10.5">
-    <text x="375" y="62">ASI01 goal hijack</text>
-    <text x="539" y="62">ASI02 tool misuse</text>
-    <text x="375" y="120">ASI02 tool misuse</text>
-    <text x="539" y="120">ASI04 supply chain</text>
-  <text x="539" y="143" text-anchor="middle" fill="#6c8ebf" font-size="10">+ env side</text>
-    <text x="708" y="120">ASI05 unexpected RCE</text>
-    <text x="375" y="294">ASI03 identity abuse</text>
-    <text x="539" y="294">ASI06 memory poisoning</text>
-    <text x="375" y="352">ASI09 human trust exploit</text>
-    <text x="375" y="410">ASI05 unexpected RCE</text>
-  </g>
-  <g fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="5 4">
-    <rect x="300" y="160" width="220" height="28" rx="8"/>
-    <rect x="300" y="218" width="220" height="28" rx="8"/>
-  </g>
-  <g fill="currentColor" text-anchor="middle" font-size="10.5" opacity="0.6">
-    <text x="410" y="178">no direct entry in the list</text>
-    <text x="410" y="236">no direct entry in the list</text>
-  </g>
-  <g fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5" stroke-dasharray="5 4">
-    <rect x="300" y="452" width="500" height="72" rx="12"/>
-  </g>
-  <g fill="currentColor" font-size="10.5">
-    <text x="318" y="474" font-weight="700">OUTSIDE THE SURFACE MODEL</text>
-    <text x="318" y="494">ASI07 · ASI08 → path attributes (propagation, not location)</text>
-    <text x="318" y="512">ASI10 → reverse dimension (agent as attacker)</text>
-  </g>
-  <text x="430" y="574" text-anchor="middle" fill="currentColor" font-size="11" opacity="0.8">The 10 ASI categories mapped onto the 7 attack surfaces; S3 and S4 receive no direct entry</text>
-</svg>
-
-十类的归属分成清晰的三组：
-- 第一组归属单一：ASI01 目标劫持落在攻击面 1，ASI03 身份与权限滥用与 ASI06 记忆与上下文投毒落在攻击面 5，ASI09 人机信任利用落在攻击面 6。
-- 第二组横跨两处：ASI02 工具滥用同时触及攻击面 1 与攻击面 2，ASI04 供应链落在攻击面 2 并延伸到环境侧，ASI05 意外代码执行覆盖攻击面 2 与攻击面 7。
-- 第三组不落在任何位置：ASI07 与 ASI08 描述失效沿通道扩散的形态，是路径属性而不是新的位置；ASI10 是 agent 作为攻击方的反向维度，在攻击面体系之外。
-
-值得注意的是，攻击面 3 与攻击面 4 没有任何条目直接对应，判定与沙箱两类关卡失效在清单里被合并进了工具滥用与意外代码执行，攻击面体系把它们单独立了出来。
-
 ## 从攻击面到攻击路径
 
 攻击面给出的是可以写入的位置，位置要变成实际危害，还差一条从入口走到出口的路线，这条路线就是攻击路径。完整的攻击路径分为五段，每一段的取值都在固定的选项集合之内：
@@ -495,7 +404,7 @@ url: /zh/ai-agent-security/02/
 
 ## 小结
 
-至此，开篇的两张图对上了：OWASP 十类逐一放进七个攻击面，没有一类需要新位置。推导同时给出贯穿全系列的结论：攻击面全部落在 harness 上，没有一个以模型为攻击对象，模型被写入只是攻击面 1 的成功率问题，不是独立的攻击目标。从攻击面到攻击路径，中间是五段结构（通道、写入、绕过、效果、出口），一条路径就是把五个段各填一个值，七个攻击面各生成一条典型路径，真实攻击是几条链的组合；这套结构是后面每篇分析路径共用的基础。
+至此，七个攻击面推导完成。推导同时给出贯穿全系列的结论：攻击面全部落在 harness 上，没有一个以模型为攻击对象，模型被写入只是攻击面 1 的成功率问题，不是独立的攻击目标。从攻击面到攻击路径，中间是五段结构（通道、写入、绕过、效果、出口），一条路径就是把五个段各填一个值，七个攻击面各生成一条典型路径，真实攻击是几条链的组合；这套结构是后面每篇分析路径共用的基础。
 
 下一篇进入第一个攻击面：上下文注入。各种内容怎么汇成一条流、写进来能控制什么、为什么输入侧的每一个过滤方案都堵不住它。
 

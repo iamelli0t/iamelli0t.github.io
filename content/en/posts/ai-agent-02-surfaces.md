@@ -10,7 +10,7 @@ url: /ai-agent-security/02/
 
 In December 2025, OWASP released the 2026 edition of its Agentic Applications Top 10 [1], consolidating the threats to agentic applications into a standard list; the derivation below uses it as a reference.
 
-The first article took the agent runtime apart into six layers and two components and left behind two structural facts: structural fact 1 is that all external content converges at assembly into one flat token stream with no provenance markers, and structural fact 2 is that the permission checkpoint covers only the model-to-action segment, so content ingestion and configuration loading never pass through it. Derived along that structural diagram, the attack surfaces differ from the threat list: their value lies in testability, in that any new vulnerability or new technique can be located on one of the attack surfaces, while whatever fails to locate exposes a gap in the structural diagram, and both outcomes advance understanding. Once the derivation is done, the ten OWASP categories are placed back onto the seven attack surfaces one by one, and the relation between the threat list and the structural diagram becomes clear.
+The first article took the agent runtime apart into six layers and two components and left behind two structural facts: structural fact 1 is that all external content converges at assembly into one flat token stream with no provenance markers, and structural fact 2 is that the permission checkpoint covers only the model-to-action segment, so content ingestion and configuration loading never pass through it. Derived along that structural diagram, the attack surfaces differ from the threat list: their value lies in testability, in that any new vulnerability or new technique can be located on one of the attack surfaces, while whatever fails to locate exposes a gap in the structural diagram, and both outcomes advance understanding.
 
 The derivation follows three questions: which classes of state decide an agent's behavior and which checkpoints intercept execution; which attack surfaces those states and checkpoints yield, and where each sits on the architecture diagram; and what still separates one attack surface from an actual attack.
 
@@ -318,97 +318,6 @@ Taken together, the seven attack surfaces arrange along a clear line: Attack Sur
 | 6 | Human interface | L1 | writable | AutoGPT 37275 |
 | 7 | Framework and runtime | harness's own code | bypassable | Langflow 3248, LangGrinch 68664 |
 
-Placing the ten OWASP categories from the previous section onto the seven attack surfaces:
-
-<svg viewBox="0 0 860 590" width="640" style="display:block;max-width:100%;height:auto;margin:1.2rem auto" role="img" aria-label="OWASP categories mapped onto the seven surfaces">
-  <defs>
-    <marker id="arrm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
-  </defs>
-  <g fill="#d43c3c">
-    <rect x="40" y="44" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="102" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="160" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="218" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="276" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="334" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-    <rect x="40" y="392" width="46" height="28" rx="8" fill="#d43c3c" fill-opacity="0.85"/>
-  </g>
-  <g fill="#ffffff" text-anchor="middle" font-size="12.5" font-weight="700">
-    <text x="63" y="63">S1</text>
-    <text x="63" y="121">S2</text>
-    <text x="63" y="179">S3</text>
-    <text x="63" y="237">S4</text>
-    <text x="63" y="295">S5</text>
-    <text x="63" y="353">S6</text>
-    <text x="63" y="411">S7</text>
-  </g>
-  <g fill="currentColor" font-size="11">
-    <text x="96" y="62">context assembly</text>
-    <text x="96" y="120">config</text>
-    <text x="96" y="178">permission check</text>
-    <text x="96" y="236">sandbox</text>
-    <text x="96" y="294">persistent state</text>
-    <text x="96" y="352">UI &amp; approval</text>
-    <text x="96" y="410">framework &amp; runtime</text>
-  </g>
-  <g stroke="currentColor" stroke-width="1.6" fill="none">
-    <path d="M252,58 H294" marker-end="url(#arrm)"/>
-    <path d="M252,116 H294" marker-end="url(#arrm)"/>
-    <path d="M252,174 H294" marker-end="url(#arrm)"/>
-    <path d="M252,232 H294" marker-end="url(#arrm)"/>
-    <path d="M252,290 H294" marker-end="url(#arrm)"/>
-    <path d="M252,348 H294" marker-end="url(#arrm)"/>
-    <path d="M252,406 H294" marker-end="url(#arrm)"/>
-  </g>
-  <g fill="rgba(127,127,127,0.08)" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.5">
-    <rect x="300" y="44" width="150" height="28" rx="8"/>
-    <rect x="464" y="44" width="150" height="28" rx="8"/>
-    <rect x="300" y="102" width="150" height="28" rx="8"/>
-    <rect x="464" y="102" width="150" height="28" rx="8"/>
-    <rect x="628" y="102" width="160" height="28" rx="8"/>
-    <rect x="300" y="276" width="150" height="28" rx="8"/>
-    <rect x="464" y="276" width="150" height="28" rx="8"/>
-    <rect x="300" y="334" width="150" height="28" rx="8"/>
-    <rect x="300" y="392" width="150" height="28" rx="8"/>
-  </g>
-  <g fill="currentColor" text-anchor="middle" font-size="10.5">
-    <text x="375" y="62">ASI01 goal hijack</text>
-    <text x="539" y="62">ASI02 tool misuse</text>
-    <text x="375" y="120">ASI02 tool misuse</text>
-    <text x="539" y="120">ASI04 supply chain</text>
-  <text x="539" y="143" text-anchor="middle" fill="#6c8ebf" font-size="10">+ env side</text>
-    <text x="708" y="120">ASI05 unexpected RCE</text>
-    <text x="375" y="294">ASI03 identity abuse</text>
-    <text x="539" y="294">ASI06 memory poisoning</text>
-    <text x="375" y="352">ASI09 human trust exploit</text>
-    <text x="375" y="410">ASI05 unexpected RCE</text>
-  </g>
-  <g fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="5 4">
-    <rect x="300" y="160" width="220" height="28" rx="8"/>
-    <rect x="300" y="218" width="220" height="28" rx="8"/>
-  </g>
-  <g fill="currentColor" text-anchor="middle" font-size="10.5" opacity="0.6">
-    <text x="410" y="178">no direct entry in the list</text>
-    <text x="410" y="236">no direct entry in the list</text>
-  </g>
-  <g fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5" stroke-dasharray="5 4">
-    <rect x="300" y="452" width="500" height="72" rx="12"/>
-  </g>
-  <g fill="currentColor" font-size="10.5">
-    <text x="318" y="474" font-weight="700">OUTSIDE THE SURFACE MODEL</text>
-    <text x="318" y="494">ASI07 · ASI08 → path attributes (propagation, not location)</text>
-    <text x="318" y="512">ASI10 → reverse dimension (agent as attacker)</text>
-  </g>
-  <text x="430" y="574" text-anchor="middle" fill="currentColor" font-size="11" opacity="0.8">The 10 ASI categories mapped onto the 7 attack surfaces; S3 and S4 receive no direct entry</text>
-</svg>
-
-The ten categories fall into three clean groups:
-- Placed on a single surface: ASI01 goal hijacking lands on Attack Surface 1; ASI03 identity and privilege abuse and ASI06 memory and context poisoning land on Attack Surface 5; ASI09 human trust exploitation lands on Attack Surface 6.
-- Spanning two surfaces: ASI02 tool misuse touches both Attack Surface 1 and Attack Surface 2; ASI04 supply chain lands on Attack Surface 2 and extends to the environment side; ASI05 unexpected code execution covers Attack Surface 2 and Attack Surface 7.
-- Placed nowhere: ASI07 and ASI08 describe how failure propagates along channels; they are path attributes, not new positions. ASI10 is the reverse dimension of the agent as attacker and lies outside the attack-surface model.
-
-Notably, Attack Surface 3 and Attack Surface 4 receive no direct entry: the list folds check and sandbox failures into tool misuse and unexpected code execution, while the attack-surface model sets them apart.
-
 ## From the Attack Surfaces to the Attack Paths
 
 An attack surface supplies the writable positions; turning a position into actual damage still takes a route from entry to exit, and that route is the attack path. A complete attack path has five segments, each of which draws its value from a fixed option set:
@@ -419,7 +328,7 @@ An attack surface supplies the writable positions; turning a position into actua
 | Write (which surface it lands on) | Attack Surface 1 context / Attack Surface 2 config / Attack Surface 5 state / Attack Surface 6 presentation |
 | Bypass (which checkpoint lets it through) | Attack Surface 3 check / Attack Surface 4 sandbox / Attack Surface 7 framework code / human |
 | Effect | read / write / execute / communicate |
-| Exit | monetization / persistence / spread |
+| Payoff | monetization / persistence / spread |
 
 <svg viewBox="0 0 1080 420" width="680" style="display:block;max-width:100%;height:auto;margin:1.2rem auto" role="img" aria-label="The five-segment path formula with the cross-session feedback loop">
   <defs>
@@ -443,7 +352,7 @@ An attack surface supplies the writable positions; turning a position into actua
     <rect x="645" y="100" width="170" height="150" rx="14" fill="rgba(127,127,127,0.08)" stroke="currentColor" stroke-opacity="0.7" stroke-width="1.8"/>
     <text x="730" y="128" text-anchor="middle" font-size="15" font-weight="700">EFFECT</text>
     <rect x="850" y="100" width="170" height="150" rx="14" fill="rgba(127,127,127,0.08)" stroke="currentColor" stroke-opacity="0.7" stroke-width="1.8"/>
-    <text x="935" y="128" text-anchor="middle" font-size="15" font-weight="700">EXIT</text>
+    <text x="935" y="128" text-anchor="middle" font-size="15" font-weight="700">PAYOFF</text>
   </g>
   <g fill="currentColor" text-anchor="middle" font-size="11.5" opacity="0.85">
     <text x="115" y="162">content</text>
@@ -472,11 +381,11 @@ An attack surface supplies the writable positions; turning a position into actua
   <text x="540" y="395" text-anchor="middle" fill="currentColor" font-size="11" opacity="0.8">one complete path = one option per segment; real attacks compose multiple typical paths</text>
 </svg>
 
-A complete attack path is simply one value filled into each of the five segments. Walked end to end with the configuration-as-execution chain: the channel is file, the malicious configuration entering with the repository clone; the write lands on Attack Surface 2, configuration; the bypass exploits the fact that event hooks never pass the check; the effect is execution; and the exit is persistence, with the written hook continuing to fire in every later session.
+A complete attack path is simply one value filled into each of the five segments. Walked end to end with the configuration-as-execution chain: the channel is file, the malicious configuration entering with the repository clone; the write lands on Attack Surface 2, configuration; the bypass exploits the fact that event hooks never pass the check; the effect is execution; and the payoff is persistence, with the written hook continuing to fire in every later session.
 
 The origin of the seven typical paths is in this table. The write segment's options are the four writable attack surfaces; the bypass segment's options are the four checkpoints, with the check, the sandbox, and the framework code corresponding to Attack Surface 3, 4, and 7, and the fourth checkpoint being the human, who is not an attack surface, so writing that deceives the human lands on Attack Surface 6.
 
-The generation method is to let each of the seven attack surfaces take a turn as the answer, without enumerating combinations of options (which would run to hundreds of meaningless mixes): whichever surface's turn it is fills the write segment or the bypass segment, while the channel, effect, and exit segments take that surface's most typical values, and the five segments joined together make one path. When Attack Surface 1 is the answer: malicious content comes in through entries like web pages and issue comments, is written into the context, and after hijacking the model's decisions picks auto-approved actions to execute, which joined together is the context-injection chain. Each of the seven attack surfaces takes one turn as the answer, yielding seven typical paths, and the table writes only the surface filled in and the signature consequence:
+The generation method is to let each of the seven attack surfaces take a turn as the answer, without enumerating combinations of options (which would run to hundreds of meaningless mixes): whichever surface's turn it is fills the write segment or the bypass segment, while the channel, effect, and payoff segments take that surface's most typical values, and the five segments joined together make one path. When Attack Surface 1 is the answer: malicious content comes in through entries like web pages and issue comments, is written into the context, and after hijacking the model's decisions picks auto-approved actions to execute, which joined together is the context-injection chain. Each of the seven attack surfaces takes one turn as the answer, yielding seven typical paths, and the table writes only the surface filled in and the signature consequence:
 
 | Typical path | Attack surface | Path shape |
 |---|---|---|
@@ -490,13 +399,13 @@ The generation method is to let each of the seven attack surfaces take a turn as
 
 The seven chains are not independent of one another; the permission-bypass chain is one example: to bring tailored input before the check, content must first be delivered, and the write segment is filled with the product of context injection. Real attacks more often string several chains together, and Cursor's CurXecute zero-click chain is a composite of four links: injection delivers, the hijacked model auto-executes allowlisted actions, the chain then harvests credentials from the environment, and a reverse shell closes with persistence. Each of the four links has its own public analysis; what constitutes the threat is the complete chain that strings them together. The typical paths are therefore reusable standard parts rather than a closed taxonomy: a single typical path describes one way through, and real attacks compose them as needed.
 
-The exit segment carries one more layer of meaning. The memory, hooks, configuration, and scheduled tasks written by a persistence exit become the next session's input; the red dashed line in the diagram is exactly this loop: this session's exit connects to the next session's channel, and a one-shot attack becomes a standing presence. Inside a session runs another, smaller loop: tool results fold back into the context for the next turn of reasoning, and injection relies on it to amplify step by step. One loop stays within the session, one spans sessions, and the two coexisting are the structural reason agent attacks are hard to defend.
+The payoff segment carries one more layer of meaning. The memory, hooks, configuration, and scheduled tasks written by a persistence payoff become the next session's input; the red dashed line in the diagram is exactly this loop: this session's exit connects to the next session's channel, and a one-shot attack becomes a standing presence. Inside a session runs another, smaller loop: tool results fold back into the context for the next turn of reasoning, and injection relies on it to amplify step by step. One loop stays within the session, one spans sessions, and the two coexisting are the structural reason agent attacks are hard to defend.
 
 Articles 3 through 9 expand the seven paths in the order of the table above, each with public cases.
 
 ## Closing Notes
 
-With this, the two pictures from the opening meet: the ten OWASP categories fit into the seven attack surfaces one by one, with no category requiring a new position. The derivation also yields the conclusion that runs through the series: the seven attack surfaces all land on the harness, none takes the model as its object of attack, and a model that gets written to is only a success-rate question for Attack Surface 1, not an independent target. From attack surfaces to attack paths, the link is the five-segment structure (channel, write, bypass, effect, exit): one path is one value filled into each of the five segments, the seven attack surfaces each generate one typical path, and real attacks are combinations of several chains; this structure is the shared basis for the path analysis in every later article.
+With this, the derivation of the seven attack surfaces is complete. The derivation also yields the conclusion that runs through the series: the seven attack surfaces all land on the harness, none takes the model as its object of attack, and a model that gets written to is only a success-rate question for Attack Surface 1, not an independent target. From attack surfaces to attack paths, the link is the five-segment structure (channel, write, bypass, effect, payoff): one path is one value filled into each of the five segments, the seven attack surfaces each generate one typical path, and real attacks are combinations of several chains; this structure is the shared basis for the path analysis in every later article.
 
 The next article enters the first attack surface: context injection. How every kind of content converges into a single stream, what writing into it controls, and why every input-side filtering proposal fails to stop it.
 
